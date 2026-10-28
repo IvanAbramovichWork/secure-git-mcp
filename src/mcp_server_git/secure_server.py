@@ -42,6 +42,7 @@ def create_server(
         "git_grep",
         "git_blame",
         "git_diff_revisions",
+        "git_unstage",
         "git_diff_unstaged",
         "git_diff_staged",
         "git_diff",
@@ -306,6 +307,17 @@ def create_server(
     @guarded
     def commit(message: str, repo_path: RepoPath = None) -> str:
         return writer.commit(message)
+
+    @server.tool(
+        name="git_unstage",
+        description="Unstage a permitted literal selection without changing working files or unrelated index entries."
+        + suffix,
+        annotations=writes(destructive=True, idempotent=True),
+        structured_output=False,
+    )
+    @guarded
+    def unstage(files: list[str], repo_path: RepoPath = None) -> str:
+        return writer.unstage(files)
 
     @server.tool(
         name="git_reset",

@@ -135,6 +135,8 @@ Path policy does not classify arbitrary copied text. Copies of protected content
 
 `git_diff_revisions(base, target, paths=None, context_lines=3)` compares two committed trees independently of working-tree changes. Literal paths filter complete old/new changes, with both rename sides checked. The existing `git_diff(target)` continues comparing a target commit with the working tree.
 
+`git_unstage(files)` resets only a nonempty literal file/directory selection in the index. Working files and unrelated staging—including protected entries—are preserved. Selected denied paths, symlinks, gitlinks and conflicts are refused before mutation. A nested selection that would replace an unselected ancestor index entry is also refused. Unborn repositories and intent-to-add entries are supported. The older `git_reset` remains an all-index operation.
+
 ## Extending output filtering
 
 Path policy operates on structured Git data first. Trusted server integrators can then compose output filters, including future token/key redactors:
