@@ -125,6 +125,22 @@ class ReadTools:
             context_lines,
         )
 
+    def diff_revisions(
+        self,
+        base: str,
+        target: str,
+        paths: list[str] | None = None,
+        context_lines: int = 3,
+    ) -> str:
+        selection = PathSelection(paths, self.policy)
+        before, after = self.backend.commit_ref(base), self.backend.commit_ref(target)
+        changes = [
+            c
+            for c in self.backend.changes(before, after)
+            if selection.matches(c.old_path) or selection.matches(c.new_path)
+        ]
+        return self._patch(changes, [before, after], context_lines)
+
     def diff(self, target: str, context_lines: int = 3) -> str:
         sha = self.backend.commit_ref(target)
         return self._patch(self.backend.changes(sha), [sha], context_lines)

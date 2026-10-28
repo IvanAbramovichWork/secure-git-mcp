@@ -41,6 +41,7 @@ def create_server(
         "git_ls_files",
         "git_grep",
         "git_blame",
+        "git_diff_revisions",
         "git_diff_unstaged",
         "git_diff_staged",
         "git_diff",
@@ -132,6 +133,23 @@ def create_server(
         return wrapped
 
     suffix = " Omit repo_path to use the configured repository. Results and operations are restricted according to project policy."
+
+    @server.tool(
+        name="git_diff_revisions",
+        description="Compare two committed trees, filtering complete changes by permitted literal paths."
+        + suffix,
+        annotations=READ_ONLY,
+        structured_output=False,
+    )
+    @guarded
+    def diff_revisions(
+        base: str,
+        target: str,
+        paths: list[str] | None = None,
+        context_lines: int = 3,
+        repo_path: RepoPath = None,
+    ) -> str:
+        return reader.diff_revisions(base, target, paths, context_lines)
 
     @server.tool(
         name="git_blame",

@@ -133,6 +133,8 @@ Path policy does not classify arbitrary copied text. Copies of protected content
 
 `git_log(..., paths=None)` accepts literal file/directory selectors, including deleted historical paths. It selects commits by permitted old/new changes, applies the visible result count after selection, and retains mixed-commit metadata redaction. It does not automatically follow a file through all previous rename names; a rename is selected by either permitted side.
 
+`git_diff_revisions(base, target, paths=None, context_lines=3)` compares two committed trees independently of working-tree changes. Literal paths filter complete old/new changes, with both rename sides checked. The existing `git_diff(target)` continues comparing a target commit with the working tree.
+
 ## Extending output filtering
 
 Path policy operates on structured Git data first. Trusted server integrators can then compose output filters, including future token/key redactors:
