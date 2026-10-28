@@ -5,7 +5,7 @@ from pathlib import PurePosixPath
 
 from .policy import DENIED, PARTIAL, PolicyError, normalize_path
 from .repository import Change, SecureRepository
-from .paths import selected_files
+from .paths import PathSelection, selected_files
 
 
 def bounded(value: int, maximum: int) -> int:
@@ -201,8 +201,10 @@ class ReadTools:
         max_count: int = 10,
         start_timestamp: str | None = None,
         end_timestamp: str | None = None,
+        paths: list[str] | None = None,
     ) -> str:
         bounded(max_count, 10000)
+        selection = PathSelection(paths, self.policy) if paths is not None else None
         args = []
         for flag, value in [("since", start_timestamp), ("until", end_timestamp)]:
             if value is not None:
@@ -220,7 +222,13 @@ class ReadTools:
             changes = self.backend.commit_changes(sha)
             denied = any(not c.allowed(self.policy) for c in changes)
             hidden |= denied
-            if changes and not any(c.allowed(self.policy) for c in changes):
+            permitted = [c for c in changes if c.allowed(self.policy)]
+            if changes and not permitted:
+                continue
+            if selection is not None and not any(
+                selection.matches(c.old_path) or selection.matches(c.new_path)
+                for c in permitted
+            ):
                 continue
             output.append(self._metadata(sha, denied))
             if len(output) >= max_count:
