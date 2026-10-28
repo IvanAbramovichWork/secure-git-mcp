@@ -30,7 +30,13 @@ async def smoke(image: str | None, parent: str | None = None) -> None:
         (root / "private/key").write_text("HIDDEN_SENTINEL\n")
         git(root, "add", ".")
         git(root, "commit", "-m", "fixture")
-        policy = '{"deny":["^private$"]}'
+        (root / ".claude").mkdir()
+        (root / ".claude/settings.json").write_text(
+            '{"sandbox":{"filesystem":{"denyRead":["private"]}}}'
+        )
+        (root / "mcp-only").mkdir()
+        (root / "mcp-only/key").write_text("MCP_HIDDEN_SENTINEL")
+        policy = '{"deny":["^mcp-only$"]}'
         if image:
             command = "docker"
             args = [
@@ -73,6 +79,8 @@ async def smoke(image: str | None, parent: str | None = None) -> None:
 
                 result, text = await call("git_show", revision="HEAD:public/readme")
                 assert not result.is_error and "VISIBLE_SENTINEL" in text
+                result, text = await call("git_add", files=["mcp-only/key"])
+                assert result.is_error and "according to project policy" in text
                 result, text = await call("git_show", revision="HEAD:private/key")
                 assert result.is_error and "according to project policy" in text
                 result, text = await call("git_show", revision="HEAD")

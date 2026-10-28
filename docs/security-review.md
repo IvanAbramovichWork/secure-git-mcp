@@ -25,3 +25,9 @@ All reproductions failed before their corresponding fixes, then passed. The fina
 - Docker evidence applies to this cloud machine, with its proxy/CA build helper and non-root bind mount. Different hosts still need correct repository mounts, ownership, and Git identity; current-machine success is not proof of deployment elsewhere.
 
 No minor review findings were deferred. No remote branch, image registry, or environment version was published. Cloud installation/startup instructions were saved as a draft; review/save and publication remain product actions for the user.
+
+## Claude deny-list inheritance follow-up
+
+A separate read-only review of Task 6 found three important matcher issues: globstar did not span newline characters, literal repository/canonical prefixes could be interpreted as glob syntax, and lexical normalization could discard symlink traversal semantics before resolution. Each was reproduced with a failing test and fixed: DOTALL glob matching, escaped physical prefixes with only supplied glob components interpreted, and resolution of the uncollapsed literal prefix. Additional regressions cover canonical target names containing brackets and both read/write inheritance of historical paths.
+
+The completed follow-up passes 297 tests, Ruff lint/format, Pyright, package build, and native plus non-root/offline Docker MCP smoke checks. Thirty-six new inheritance tests include absent-file MCP fallback, invalid/unreadable-file errors, additive rules, immutable snapshots, repository-root discovery, and supported glob forms. No minor review issues were deferred. This imports project denyRead only: exact platform sandbox behavior, allowRead exceptions, user/local/global settings, and mutation of operator-controlled configuration or aliases after startup remain outside this feature. The existing unrestricted legacy-helper boundary is unchanged.

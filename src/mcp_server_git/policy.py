@@ -3,7 +3,7 @@
 import json
 import os
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 
 DENIED = "Access denied according to project policy."
@@ -35,6 +35,29 @@ def normalize_path(path: str) -> str:
 @dataclass(frozen=True)
 class PathPolicy:
     patterns: tuple[re.Pattern[str], ...]
+    claude_patterns: tuple[re.Pattern[str], ...] = ()
+    claude_root: str | None = None
+    claude_denies_repository: bool = False
+
+    def with_claude_settings(self, repository: Path) -> "PathPolicy":
+        from .claude_policy import load_claude_patterns
+
+        root = repository.resolve()
+        key = root.as_posix()
+        if self.claude_root is not None:
+            if self.claude_root != key:
+                raise PolicyError("Project policy is bound to another repository.")
+            return self
+        patterns = load_claude_patterns(root)
+        denied = any(
+            p.fullmatch(a.as_posix()) for a in (root, *root.parents) for p in patterns
+        )
+        return replace(
+            self,
+            claude_patterns=patterns,
+            claude_root=key,
+            claude_denies_repository=denied,
+        )
 
     @classmethod
     def from_json(cls, value: str) -> "PathPolicy":
@@ -57,7 +80,15 @@ class PathPolicy:
             normalized = normalize_path(path)
         except PolicyError:
             return False
+        if self.claude_denies_repository:
+            return False
         parts = normalized.split("/")
+        if self.claude_root is not None and any(
+            pattern.fullmatch(self.claude_root.rstrip("/") + "/" + "/".join(parts[:n]))
+            for n in range(1, len(parts) + 1)
+            for pattern in self.claude_patterns
+        ):
+            return False
         return not any(
             pattern.search("/".join(parts[:n]))
             for n in range(1, len(parts) + 1)

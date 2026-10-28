@@ -18,7 +18,7 @@ class SecureRepository:
             self.root = Path(self.repo.working_tree_dir).resolve()
         except (git.GitError, OSError):
             raise PolicyError("Invalid configured repository.") from None
-        self.policy = policy
+        self.policy = policy.with_claude_settings(self.root)
         self.lock = threading.RLock()
 
     def validate_repo_path(self, path: str) -> None:

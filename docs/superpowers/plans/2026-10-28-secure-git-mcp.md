@@ -92,3 +92,16 @@
 - [x] Run the documented frozen install and native smoke commands; then `docker build -t secure-git-mcp:local .` and the Docker MCP smoke check. Verify a real stdio functional result and allowed writes as the chosen non-root UID; diagnose any build or mount restriction without bypassing artifact/TLS verification.
 - [x] Run final full pytest, Ruff lint/format checks, Pyright, and package build; inspect Git diff/status and ensure generated outputs/secrets are excluded. Obtain independent whole-branch review for policy bypasses and unexpected mutation, resolve findings, and rerun affected checks.
 - [x] Save tested reusable cloud `install_script` and `start_skill` if needed; include working directories, startup policy requirements and readiness checks, and the instruction to use the existing isolated checkout. Report current-instance validation separately from saved drafts/publication. Commit deployment/docs and report test evidence and remaining limits.
+
+### Task 6: Inherit project Claude deny paths with MCP fallback
+
+**User steering:** Import `.claude/settings.json` `sandbox.filesystem.denyRead`; keep MCP regex additions; absent Claude file falls back to MCP. Continue the approved native implementation and existing policy architecture.
+
+**Files:** Add `src/mcp_server_git/claude_policy.py`, `tests/test_claude_policy.py`; extend `policy.py`, `repository.py`, `secure_cli.py`; update README, smoke script, examples, and setup/start instructions where necessary.
+
+**Interfaces:** `PathPolicy.with_claude_settings(repository: Path) -> PathPolicy` returns an immutable, once-bound merged policy. `SecureRepository` always uses that merged policy. A helper loads/validates deny paths and compiles anchored logical path/glob matchers; relative roots use the real served repository, not cwd. Do not add runtime dependencies.
+
+- [x] Write failing tests for missing-file fallback, nested field parsing, malformed/unreadable/symlink-missing files, regex+glob union, no allowRead override, directory ancestry, dotfiles, `*`/`**`/`?`/brackets, absolute/home paths, literal symlink aliases, immutable startup snapshots, and historical absent paths. Run them and confirm failures.
+- [x] Implement deny-list loading and logical glob matching, reject invalid/unsupported patterns without echoing values, and bind all CLI/Python paths once to the canonical repository root. Keep explicit MCP configuration mandatory and preserve existing validation.
+- [x] Exercise reads/writes and history with a Claude-only denied directory plus an MCP-only denied directory, including startup from a subdirectory. Update smoke validation for native and Docker, documenting absent-file fallback and mounted relative settings.
+- [x] Run complete pytest, Ruff, Pyright, build, native smoke, and Docker build/smoke as capabilities permit; get an independent review of the delta, fix relevant findings with reproducing tests, and commit the completed change. Record any genuine environment blocker separately from application checks.

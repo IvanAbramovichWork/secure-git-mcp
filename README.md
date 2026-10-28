@@ -80,6 +80,26 @@ Matching uses case-sensitive regex **search**, applied to each normalized POSIX 
 
 Keep policy and launcher configuration under operator control, outside the agent's writable scope. Configure any other shell, filesystem, or MCP tools separately: this server cannot restrict those tools or stop them modifying a policy file and restarting a process.
 
+## Inherit Claude project deny paths
+
+The server automatically reads `<repository>/.claude/settings.json` at startup and imports `sandbox.filesystem.denyRead`. Additional MCP `deny` regexes still apply: a match in either source denies access, including writes and historical Git reads.
+
+```json
+{
+  "sandbox": {
+    "filesystem": {
+      "denyRead": ["private", "modules/payments/**", "**/.env", "**/*.pem"]
+    }
+  }
+}
+```
+
+If the Claude file is absent, the server falls back to MCP rules. Missing `sandbox`, `filesystem`, or `denyRead` sections mean no inherited denies. An existing malformed/unreadable file or dangling settings symlink prevents startup. Explicit MCP policy remains required; use `{"deny":[]}` to add no extra regex restrictions. Policy is frozen until restart, including the missing-file fallback.
+
+Inherited entries are paths/globs, never regexes: `*` stays within one path component, `**` crosses directories, `?` matches one non-separator, and bracket sets are supported. A directory match denies its descendants. Matching includes dotfiles and historical/absent paths; it does not expand only files currently on disk. Literal spellings are also denied, and existing literal symlink prefixes are resolved to cover target aliases. Unsupported backslash patterns, unresolved home names, globs ending in `/`, and `..` after wildcard components fail closed. Relative paths resolve from the served repository root; absolute paths and `~` use the server's filesystem/account. Prefer relative paths in Docker: host absolute paths do not automatically map to `/repo`.
+
+This imports only the project's deny list, not the complete platform sandbox policy: `allowRead` exceptions cannot remove these denials, and user-level settings and `settings.local.json` are not imported. Keep the project settings file operator-controlled. With Docker, include `.claude/settings.json` in the repository mount; an omitted file intentionally activates MCP-only fallback.
+
 ## Tool behavior
 
 | Tool | Enforcement |

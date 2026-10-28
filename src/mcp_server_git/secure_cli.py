@@ -38,6 +38,7 @@ def main(
         policy = load_policy(mcp_config, server_name)
         backend = SecureRepository(repository, policy)
         root = backend.root
+        policy = backend.policy
         backend.repo.close()
         asyncio.run(serve(root, policy))
     except PolicyError as exc:
