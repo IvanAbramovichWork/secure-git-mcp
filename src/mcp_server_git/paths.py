@@ -107,8 +107,15 @@ def require_working_file(
     backend.policy.require(path)
     candidate = backend.root
     try:
-        for component in Path(path).parts:
+        components = Path(path).parts
+        for index, component in enumerate(components):
             candidate = candidate / component
+            if (
+                index < len(components) - 1
+                and candidate.exists()
+                and not candidate.is_dir()
+            ):
+                raise PolicyError("Access denied according to project policy.")
             if candidate.is_symlink():
                 raise PolicyError("Access denied according to project policy.")
         backend.policy.require(candidate.resolve().relative_to(backend.root).as_posix())

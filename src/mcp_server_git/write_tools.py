@@ -6,7 +6,7 @@ from typing import Callable, ParamSpec, TypeVar
 
 from .policy import DENIED, PolicyError, normalize_path
 from .repository import Change, SecureRepository
-from .paths import PathSelection, REGULAR_MODES, entries
+from .paths import PathSelection, REGULAR_MODES, entries, require_working_file
 
 _P = ParamSpec("_P")
 _R = TypeVar("_R")
@@ -114,6 +114,63 @@ class WriteTools:
             "-c", "commit.gpgSign=false", "commit", "--no-verify", "-m", message
         )
         return "Changes committed successfully with hash " + str(self.backend.head())
+
+    @locked
+    def restore(
+        self,
+        files: list[str],
+        source: str | None = None,
+        staged: bool = False,
+        worktree: bool | None = None,
+    ) -> str:
+        self._clean_operation_state()
+        if not files:
+            raise PolicyError("Empty path selection.")
+        to_worktree = not staged if worktree is None else worktree
+        if not staged and not to_worktree:
+            raise PolicyError("No restore destination selected.")
+        names = list(dict.fromkeys(normalize_path(p) for p in files))
+        index_entries = entries(self.backend)
+        index = {e.path: e for e in index_entries}
+        if source is None and not staged:
+            commit = None
+            source_entries = index_entries
+        elif source is None and staged:
+            commit = self.backend.head()
+            source_entries = entries(self.backend, commit) if commit is not None else []
+        else:
+            commit = self.backend.commit_ref(source or "HEAD")
+            source_entries = entries(self.backend, commit)
+        origin = {e.path: e for e in source_entries}
+        known_paths = set(index) | set(origin)
+        for path in names:
+            parts = path.split("/")
+            if any("/".join(parts[:n]) in known_paths for n in range(1, len(parts))):
+                raise PolicyError("Ambiguous file/directory transition.")
+            self.backend.policy.require(path)
+            require_working_file(self.backend, path, missing_ok=True)
+            if any(
+                e.path.startswith(path + "/") for e in index_entries + source_entries
+            ):
+                raise PolicyError(DENIED)
+            selected = [e for e in (index.get(path), origin.get(path)) if e is not None]
+            if not selected:
+                raise PolicyError("No matching regular file.")
+            if any(e.mode not in REGULAR_MODES for e in selected):
+                raise PolicyError(DENIED)
+        if staged and not to_worktree and source is None:
+            return self.unstage(names)
+        if staged and commit is None:
+            raise PolicyError("No source commit for combined restore.")
+        args = ["restore", "--no-recurse-submodules"]
+        if commit is not None:
+            args.append("--source=" + commit)
+        if staged:
+            args.append("--staged")
+        if to_worktree:
+            args.append("--worktree")
+        self.backend.run(*args, "--", *names)
+        return "Selected regular files restored."
 
     @locked
     def unstage(self, files: list[str]) -> str:

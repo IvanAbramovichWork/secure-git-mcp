@@ -137,6 +137,8 @@ Path policy does not classify arbitrary copied text. Copies of protected content
 
 `git_unstage(files)` resets only a nonempty literal file/directory selection in the index. Working files and unrelated staging—including protected entries—are preserved. Selected denied paths, symlinks, gitlinks and conflicts are refused before mutation. A nested selection that would replace an unselected ancestor index entry is also refused. Unborn repositories and intent-to-add entries are supported. The older `git_reset` remains an all-index operation.
 
+`git_restore(files, source=None, staged=False, worktree=None)` destructively restores explicitly named regular files. By default it restores the working file from the index. `staged=true` defaults to restoring only the index from HEAD; set `worktree=true` as well to restore both. An explicit `source` selects a commit. Directory selectors (including `.`), ambiguous type transitions, symlinks, submodules, conflicts and protected selections are refused. Source/index/actual filesystem paths are checked before mutation; unrelated files and staging are preserved. Unborn repositories support index-to-worktree restore and index-only unstaging.
+
 ## Extending output filtering
 
 Path policy operates on structured Git data first. Trusted server integrators can then compose output filters, including future token/key redactors:

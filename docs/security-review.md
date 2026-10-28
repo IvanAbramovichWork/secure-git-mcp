@@ -37,3 +37,24 @@ The completed follow-up passes 297 tests, Ruff lint/format, Pyright, package bui
 The direct Docker command retains fixed `dst=/repo`; only source needs customization. The image starts in `/repo`, startup `--repository` defaults to cwd, and all 12 tools default omitted/null `repo_path` to the pinned repository. Explicit paths are still checked and cannot open other or nested repositories. Empty paths are rejected. Required operation arguments remain required, and existing named-argument clients remain compatible.
 
 Six new regression cases verified cwd/subdirectory resolution, failure outside a repository, optional schemas, all 12 defaulted tools, and unchanged index after an explicit wrong-path write. All 303 tests passed, alongside lint/format, type checks, package build and native/non-root offline Docker stdio smoke. An independent read-only review found no Important or Critical issues in this delta. The existing generic error masking issue remains unchanged.
+
+## Eight additional local features
+
+The user chose local features first, TDD, and one feature per commit. History-changing and remote tools remain outside this batch. The baseline had 303 tests; the final local suite has 358. Each new feature's tests failed before implementation and passed afterward, with a full-suite check before its feature commit. Review fixes were folded into the owning commits; no pre-existing commits or published history were rewritten.
+
+| Feature | New tests in final history | Enforcement |
+| --- | ---: | --- |
+| Accurate errors | 7 | Fixed server-owned codes/messages; raw Git stderr and argument values never returned |
+| git_ls_files | 4 | Literal selectors, regular modes, escaped names, historical/untracked selection |
+| git_grep | 6 | Permitted tracked files, exact pathspecs, NUL parsing, symlink checks, bounded results |
+| git_blame | 9 | Historical filename/provenance checks and mixed-commit metadata redaction |
+| Path-filtered git_log | 3 | Permitted old/new logical paths, visible result counts, metadata redaction |
+| git_diff_revisions | 5 | Two committed trees, complete change filtering, exact-file rendering |
+| git_unstage | 8 | Validated selection, intent-to-add/unborn support, unrelated index preservation |
+| git_restore | 13 | Explicit regular files, source/index/filesystem preflight, destructive annotation |
+
+The independent read-only review found three Important issues: caller-supplied malformed regex text could imitate an ownership diagnostic; unstaging could replace an unselected ancestor index entry; restore could do the same. Ownership classification now requires the genuine leading fatal diagnostic and exit code. Both writes now inspect index ancestors before mutation and refuse ambiguous transitions, with regular/symlink/gitlink regression cases checking exact index preservation. A reported relative-path normalization inconsistency in blame was also reproduced and corrected. All findings have RED→GREEN evidence; no review findings were deferred and no second independent review was performed.
+
+Final verification includes lint/format, project-interpreter type checks, wheel/source build, and native/non-root offline Docker MCP smoke exercising the new reads, filtered history/diffs, selective unstage and protected restore denial. Tool optional-repository defaults and existing policy/output-filter behavior remain active. The image was built locally, not pushed to a registry. Code publication is a separate user action.
+
+All eight final feature commits were independently tested from disposable source archives against the locked development environment. Cumulative full-suite results were 310, 314, 320, 329, 332, 337, 345, and 358 passed. The verifier asserted that each run imported its archive's own package. These archive runs emitted an anyio assertion-rewrite warning because that verification imported the package before pytest plugin setup; no tests were skipped, and the normal checkout suite was warning-free.
