@@ -27,7 +27,8 @@ Repository = "https://github.com/modelcontextprotocol/servers/tree/main/src/git"
 Issues = "https://github.com/modelcontextprotocol/servers/issues"
 
 [project.scripts]
-mcp-server-git = "mcp_server_git:main"
+secure-git-mcp = "mcp_server_git.secure_cli:main"
+mcp-server-git = "mcp_server_git.secure_cli:main"
 
 [build-system]
 requires = ["hatchling"]
