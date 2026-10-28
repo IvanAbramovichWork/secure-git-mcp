@@ -5,6 +5,7 @@ from pathlib import PurePosixPath
 
 from .policy import DENIED, PARTIAL, PolicyError, normalize_path
 from .repository import Change, SecureRepository
+from .paths import selected_files
 
 
 def bounded(value: int, maximum: int) -> int:
@@ -21,6 +22,17 @@ class ReadTools:
     def __init__(self, repository: SecureRepository):
         self.backend = repository
         self.policy = repository.policy
+
+    def ls_files(
+        self,
+        paths: list[str] | None = None,
+        revision: str | None = None,
+        include_untracked: bool = False,
+    ) -> str:
+        files, hidden = selected_files(self.backend, paths, revision, include_untracked)
+        return with_notice(
+            "\n".join(json.dumps(e.path, ensure_ascii=True) for e in files), hidden
+        )
 
     def status(self) -> str:
         raw = self.backend.run(

@@ -123,6 +123,10 @@ Partial results include **“Some content is unavailable according to project po
 
 Path policy does not classify arbitrary copied text. Copies of protected content in permitted files, author names/messages on entirely permitted commits, and branch names are not automatically redacted. Similarity-based rename detection checks both paths; a copy or heavily rewritten file at an allowed path is governed by that allowed path. Do not treat directory rules as automatic secret detection or an OS sandbox. Use a trusted repository/Git configuration and exclusive access for writes. Git attribute filters and signing/credential helpers must be controlled by the operator; runtime networking is disabled in the Docker example.
 
+## Additional local tools
+
+`git_ls_files(paths=None, revision=None, include_untracked=False)` lists permitted regular files, using the index by default. A commit revision selects historical files; optional untracked files exclude ignored entries and cannot be combined with a revision. Selectors are literal file/directory paths (`.` selects the root), not globs. Names are JSON-escaped, and protected/symlink/submodule entries are omitted with a policy notice.
+
 ## Extending output filtering
 
 Path policy operates on structured Git data first. Trusted server integrators can then compose output filters, including future token/key redactors:

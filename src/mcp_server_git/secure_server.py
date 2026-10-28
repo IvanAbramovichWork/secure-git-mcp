@@ -38,6 +38,7 @@ def create_server(
     pipeline = FilterPipeline(filters)
     names = {
         "git_status",
+        "git_ls_files",
         "git_diff_unstaged",
         "git_diff_staged",
         "git_diff",
@@ -129,6 +130,22 @@ def create_server(
         return wrapped
 
     suffix = " Omit repo_path to use the configured repository. Results and operations are restricted according to project policy."
+
+    @server.tool(
+        name="git_ls_files",
+        description="List selected permitted regular files in the index or a commit."
+        + suffix,
+        annotations=READ_ONLY,
+        structured_output=False,
+    )
+    @guarded
+    def ls_files(
+        paths: list[str] | None = None,
+        revision: str | None = None,
+        include_untracked: bool = False,
+        repo_path: RepoPath = None,
+    ) -> str:
+        return reader.ls_files(paths, revision, include_untracked)
 
     @server.tool(
         name="git_status",
