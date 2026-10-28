@@ -1,379 +1,154 @@
-# mcp-server-git: A git MCP server
+# Secure Git MCP
 
-<!-- mcp-name: io.github.modelcontextprotocol/server-git -->
+A standalone derivative of the [MCP Git reference server](https://github.com/modelcontextprotocol/servers/tree/main/src/git) that enforces project path policy before returning Git output or changing repository state. All 12 upstream tools remain available. Restricted content produces an explicit policy notice; denied writes are rejected as a whole.
 
-## Overview
+See [upstream provenance](UPSTREAM.md), [the approved design](docs/superpowers/specs/2026-10-28-secure-git-design.md), and the preserved [package license](LICENSE) and [upstream licensing notice](UPSTREAM-LICENSE).
 
-A Model Context Protocol server for Git repository interaction and automation. This server provides tools to read, search, and manipulate Git repositories via Large Language Models.
+## Quick start with Docker
 
-Source: https://github.com/modelcontextprotocol/servers/tree/main/src/git
+Build locally (the image has not been published):
 
-Requires MCP Python SDK 2.x (`mcp>=2.3,<3`). The server is built on the SDK's high-level `MCPServer`: each tool is a typed Python function, and the SDK derives its input schema from the signature.
-
-Please note that mcp-server-git is currently in early development. The functionality and available tools are subject to change and expansion as we continue to develop and improve the server.
-
-### Tools
-
-1. `git_status`
-   - Shows the working tree status
-   - Input:
-     - `repo_path` (string): Path to Git repository
-   - Returns: Current status of working directory as text output
-
-2. `git_diff_unstaged`
-   - Shows changes in working directory not yet staged
-   - Inputs:
-     - `repo_path` (string): Path to Git repository
-     - `context_lines` (number, optional): Number of context lines to show (default: 3)
-   - Returns: Diff output of unstaged changes
-
-3. `git_diff_staged`
-   - Shows changes that are staged for commit
-   - Inputs:
-     - `repo_path` (string): Path to Git repository
-     - `context_lines` (number, optional): Number of context lines to show (default: 3)
-   - Returns: Diff output of staged changes
-
-4. `git_diff`
-   - Shows differences between branches or commits
-   - Inputs:
-     - `repo_path` (string): Path to Git repository
-     - `target` (string): Target branch or commit to compare with
-     - `context_lines` (number, optional): Number of context lines to show (default: 3)
-   - Returns: Diff output comparing current state with target
-
-5. `git_commit`
-   - Records changes to the repository
-   - Inputs:
-     - `repo_path` (string): Path to Git repository
-     - `message` (string): Commit message
-   - Returns: Confirmation with new commit hash; an error if nothing is staged (as `git commit` without `--allow-empty`), except while a merge is in progress (`MERGE_HEAD` present), where git also allows an empty commit. While a merge is in progress the commit concludes it: its parents are `HEAD` and every `MERGE_HEAD` commit, and the merge state is cleared
-
-6. `git_add`
-   - Adds file contents to the staging area
-   - Inputs:
-     - `repo_path` (string): Path to Git repository
-     - `files` (string[]): Non-empty array of file paths to stage; `["."]` stages everything
-   - Returns: Confirmation of staged files, or a message saying nothing was staged when the call left the index unchanged
-
-7. `git_reset`
-   - Unstages all staged changes
-   - Input:
-     - `repo_path` (string): Path to Git repository
-   - Returns: Confirmation of reset operation
-
-8. `git_log`
-   - Shows the commit logs with optional date filtering
-   - Inputs:
-     - `repo_path` (string): Path to Git repository
-     - `max_count` (number, optional): Maximum number of commits to show (default: 10)
-     - `start_timestamp` (string, optional): Start timestamp for filtering commits. Accepts ISO 8601 format (e.g., '2024-01-15T14:30:25'), relative dates (e.g., '2 weeks ago', 'yesterday'), or absolute dates (e.g., '2024-01-15', 'Jan 15 2024')
-     - `end_timestamp` (string, optional): End timestamp for filtering commits. Accepts ISO 8601 format (e.g., '2024-01-15T14:30:25'), relative dates (e.g., '2 weeks ago', 'yesterday'), or absolute dates (e.g., '2024-01-15', 'Jan 15 2024')
-   - Returns: Array of commit entries with hash, author, date, and message
-
-9. `git_create_branch`
-   - Creates a new branch
-   - Inputs:
-     - `repo_path` (string): Path to Git repository
-     - `branch_name` (string): Name of the new branch
-     - `base_branch` (string, optional): Base branch to create from (defaults to current branch)
-   - Returns: Confirmation of branch creation
-10. `git_checkout`
-   - Switches branches
-   - Inputs:
-     - `repo_path` (string): Path to Git repository
-     - `branch_name` (string): Name of branch to checkout
-   - Returns: Confirmation of branch switch, or `HEAD is now detached at <short sha>` when `branch_name` is not a branch (a sha, tag or other revision)
-11. `git_show`
-   - Shows the contents of a commit, or of a file or directory at a revision
-   - Inputs:
-     - `repo_path` (string): Path to Git repository
-     - `revision` (string): The revision (commit hash, branch name, tag) or object spec (`HEAD:path/to/file`) to show
-   - Returns: Contents of the specified commit, file content, or directory listing
-
-12. `git_branch`
-   - List Git branches
-   - Inputs:
-     - `repo_path` (string): Path to the Git repository.
-     - `branch_type` (string): Whether to list local branches ('local'), remote branches ('remote') or all branches('all').
-     - `contains` (string, optional): The commit sha that branch should contain. Do not pass anything to this param if no commit sha is specified
-     - `not_contains` (string, optional): The commit sha that branch should NOT contain. Do not pass anything to this param if no commit sha is specified
-   - Returns: List of branches
-
-### Protocol versions
-
-The server speaks both eras of the Model Context Protocol over stdio, with nothing to configure: a **2026-07-28** client (discovered with `server/discover`, no session) and a **2025-11-25** client (the `initialize` handshake). The client's first request decides which. Tools behave the same in both.
-
-Roots is deprecated in 2026-07-28, and this server never asks a client for Roots in either era: repository access comes from `--repository` alone, or, with no `--repository`, from each tool call's `repo_path`. Methods the 2026-07-28 specification removes, such as `ping`, are answered only on a 2025-11-25 connection.
-
-### Errors
-
-- **A tool that fails** returns a result with `isError: true` whose text is `Error executing tool <name>: <message>`, so the model can read it and correct the call. This covers git errors (an unknown revision, a failed command), a `repo_path` that is not a repository or is outside `--repository`, the flag-injection guards, and arguments that do not match the tool's input schema.
-- **An unknown tool name** is a protocol error, JSON-RPC `-32602` (`Unknown tool: <name>`), as the specification requires in both eras. Before 2.0.0 it was an `isError` result.
-
-## Installation
-
-### Using uv (recommended)
-
-When using [`uv`](https://docs.astral.sh/uv/) no specific installation is needed. We will
-use [`uvx`](https://docs.astral.sh/uv/guides/tools/) to directly run *mcp-server-git*.
-
-### Using PIP
-
-Alternatively you can install `mcp-server-git` via pip:
-
-```
-pip install mcp-server-git
+```sh
+docker build -t secure-git-mcp:local .
 ```
 
-After installation, you can run it as a script using:
-
-```
-python -m mcp_server_git
-```
-
-## Configuration
-
-`--repository` (`-r`) accepts any path inside a Git working tree. At startup the server walks up to the enclosing repository root, the way `git rev-parse --show-toplevel` does, so `--repository .` works when a shared config is launched from any subdirectory of the repository. A path inside the repository therefore allows tool calls anywhere in that repository, not only under the subdirectory given. A path that does not exist, or is not inside a Git repository, is logged as a one-line error at startup.
-
-### Usage with Claude Desktop
-
-Add this to your `claude_desktop_config.json`:
-
-<details>
-<summary>Using uvx</summary>
-
-```json
-"mcpServers": {
-  "git": {
-    "command": "uvx",
-    "args": ["mcp-server-git", "--repository", "path/to/git/repo"]
-  }
-}
-```
-</details>
-
-<details>
-<summary>Using docker</summary>
-
-* Note: replace '/Users/username' with a path that you want to be accessible by this tool
-
-```json
-"mcpServers": {
-  "git": {
-    "command": "docker",
-    "args": ["run", "--rm", "-i", "--mount", "type=bind,src=/Users/username,dst=/Users/username", "mcp/git"]
-  }
-}
-```
-</details>
-
-<details>
-<summary>Using pip installation</summary>
-
-```json
-"mcpServers": {
-  "git": {
-    "command": "python",
-    "args": ["-m", "mcp_server_git", "--repository", "path/to/git/repo"]
-  }
-}
-```
-</details>
-
-### Usage with VS Code
-
-For quick installation, use one of the one-click install buttons below...
-
-[![Install with UV in VS Code](https://img.shields.io/badge/VS_Code-UV-0098FF?style=flat-square&logo=visualstudiocode&logoColor=white)](https://insiders.vscode.dev/redirect/mcp/install?name=git&config=%7B%22command%22%3A%22uvx%22%2C%22args%22%3A%5B%22mcp-server-git%22%5D%7D) [![Install with UV in VS Code Insiders](https://img.shields.io/badge/VS_Code_Insiders-UV-24bfa5?style=flat-square&logo=visualstudiocode&logoColor=white)](https://insiders.vscode.dev/redirect/mcp/install?name=git&config=%7B%22command%22%3A%22uvx%22%2C%22args%22%3A%5B%22mcp-server-git%22%5D%7D&quality=insiders)
-
-[![Install with Docker in VS Code](https://img.shields.io/badge/VS_Code-Docker-0098FF?style=flat-square&logo=visualstudiocode&logoColor=white)](https://insiders.vscode.dev/redirect/mcp/install?name=git&config=%7B%22command%22%3A%22docker%22%2C%22args%22%3A%5B%22run%22%2C%22--rm%22%2C%22-i%22%2C%22--mount%22%2C%22type%3Dbind%2Csrc%3D%24%7BworkspaceFolder%7D%2Cdst%3D%2Fworkspace%22%2C%22mcp%2Fgit%22%5D%7D) [![Install with Docker in VS Code Insiders](https://img.shields.io/badge/VS_Code_Insiders-Docker-24bfa5?style=flat-square&logo=visualstudiocode&logoColor=white)](https://insiders.vscode.dev/redirect/mcp/install?name=git&config=%7B%22command%22%3A%22docker%22%2C%22args%22%3A%5B%22run%22%2C%22--rm%22%2C%22-i%22%2C%22--mount%22%2C%22type%3Dbind%2Csrc%3D%24%7BworkspaceFolder%7D%2Cdst%3D%2Fworkspace%22%2C%22mcp%2Fgit%22%5D%7D&quality=insiders)
-
-For manual installation, you can configure the MCP server using one of these methods:
-
-**Method 1: User Configuration (Recommended)**
-Add the configuration to your user-level MCP configuration file. Open the Command Palette (`Ctrl + Shift + P`) and run `MCP: Open User Configuration`. This will open your user `mcp.json` file where you can add the server configuration.
-
-**Method 2: Workspace Configuration**
-Alternatively, you can add the configuration to a file called `.vscode/mcp.json` in your workspace. This will allow you to share the configuration with others.
-
-> For more details about MCP configuration in VS Code, see the [official VS Code MCP documentation](https://code.visualstudio.com/docs/copilot/customization/mcp-servers).
+Copy [examples/docker.mcp.json](examples/docker.mcp.json) to your MCP client's `.mcp.json`, changing the absolute project path and numeric UID:GID. A complete configuration is:
 
 ```json
 {
-  "servers": {
-    "git": {
-      "command": "uvx",
-      "args": ["mcp-server-git"]
-    }
-  }
-}
-```
-
-For Docker installation:
-
-```json
-{
-  "mcp": {
-    "servers": {
-      "git": {
-        "command": "docker",
-        "args": [
-          "run",
-          "--rm",
-          "-i",
-          "--mount", "type=bind,src=${workspaceFolder},dst=/workspace",
-          "mcp/git"
-        ]
+  "mcpServers": {
+    "secure-git": {
+      "command": "docker",
+      "args": [
+        "run", "--rm", "-i", "--network=none",
+        "--user", "1000:1000",
+        "--env", "SECURE_GIT_POLICY",
+        "--mount", "type=bind,src=/absolute/path/to/project,dst=/repo",
+        "secure-git-mcp:local", "--repository", "/repo"
+      ],
+      "env": {
+        "SECURE_GIT_POLICY": "{\"deny\":[\"^private(/|$)\",\"^modules/payments(/|$)\"]}"
       }
     }
   }
 }
 ```
 
-### Usage with [Zed](https://github.com/zed-industries/zed)
+The client's `env` entry sets the Docker process environment; `--env SECURE_GIT_POLICY` forwards it into the container. The server's tool calls use `repo_path: "/repo"`, not the host path. Use `-i` without `-t`: MCP runs over stdio, not an HTTP port. Runtime networking is disabled; local Git operations do not need it. Network access is needed while building dependencies.
 
-Add to your Zed settings.json:
+The image defaults to UID:GID `1000:1000`. Set `--user` to the repository owner's output from `id -u` and `id -g` on Linux, and ensure the working tree and Git directory are readable/writable by that identity. Git commits require a locally configured author name and email. Do not bypass Git ownership checks with `safe.directory=*`; fix ownership or explicitly trust the one intended repository in operator-controlled Git configuration. Linked worktrees also need their external Git metadata mounted at the correct location; a normal standalone clone is easiest to deploy. A read-only bind mount permits reads but cannot support write tools.
 
-<details>
-<summary>Using uvx</summary>
+To keep policy in an external trusted `.mcp.json` instead of forwarding env, mount it read-only at `/config/.mcp.json` and append `--mcp-config /config/.mcp.json` after the image name. This file has the same `mcpServers.secure-git.env.SECURE_GIT_POLICY` structure shown above. Mount only the intended working tree and required trusted configuration.
 
-```json
-"context_servers": [
-  "mcp-server-git": {
-    "command": {
-      "path": "uvx",
-      "args": ["mcp-server-git"]
-    }
-  }
-],
-```
-</details>
+## Native development and use
 
-<details>
-<summary>Using pip installation</summary>
+Requires Git, [uv](https://docs.astral.sh/uv/), and Python >=3.10. `.python-version` pins the upstream development interpreter to Python 3.10; Docker uses Python 3.12.
 
-```json
-"context_servers": {
-  "mcp-server-git": {
-    "command": {
-      "path": "python",
-      "args": ["-m", "mcp_server_git"]
-    }
-  }
-},
-```
-</details>
-
-### Usage with [Zencoder](https://zencoder.ai)
-
-1. Go to the Zencoder menu (...)
-2. From the dropdown menu, select `Agent Tools`
-3. Click on the `Add Custom MCP`
-4. Add the name (i.e. git) and server configuration from below, and make sure to hit the `Install` button
-
-<details>
-<summary>Using uvx</summary>
-
-```json
-{
-    "command": "uvx",
-    "args": ["mcp-server-git", "--repository", "path/to/git/repo"]
-}
-```
-</details>
-
-## Debugging
-
-You can use the MCP inspector to debug the server. For uvx installations:
-
-```
-npx @modelcontextprotocol/inspector uvx mcp-server-git
+```sh
+uv sync --frozen --dev
+SECURE_GIT_POLICY='{"deny":["^private(/|$)","^modules/payments(/|$)"]}' \
+  uv run --frozen secure-git-mcp --repository /absolute/path/to/project
 ```
 
-Or if you've installed the package in a specific directory or are developing on it:
+For an MCP client, use [examples/native.mcp.json](examples/native.mcp.json). It runs this checkout with `uv --directory /absolute/path/to/secure-git-mcp run --frozen secure-git-mcp ...`. Installing the upstream package from PyPI is not an installation of this derivative: use this checkout or its built wheel.
 
-```
-cd path/to/servers/src/git
-npx @modelcontextprotocol/inspector uv run mcp-server-git
-```
+The compatibility command `mcp-server-git` and `python -m mcp_server_git` both invoke the same secured CLI. `--repository` is mandatory and pins one repository; a tool cannot open a different or nested repository. When the startup path points inside a repository, it resolves to its working-tree root. Tool `repo_path` must identify that root (a real filesystem alias is accepted).
 
-Running `tail -n 20 -f ~/Library/Logs/Claude/mcp*.log` will show the logs from the server and may
-help you debug any issues.
+Optional arguments:
 
-## Development
-
-### Tests and coverage
-
-The test suite drives `serve()` in-process through an MCP `ClientSession`
-(see `tests/conftest.py`), and `tests/test_eras.py` runs a `Client` against it
-as a 2026-07-28 and as a 2025-11-25 client. From `src/git`:
-
-```bash
-uv run --frozen pytest                 # the tests
-uv run --frozen pytest --cov --cov-report=term-missing --cov-report=json
+```sh
+uv run --frozen secure-git-mcp \
+  --repository /absolute/path/to/project \
+  --mcp-config /trusted/location/.mcp.json \
+  --server-name secure-git
 ```
 
-The second command adds branch coverage of `src/mcp_server_git`, printed per
-file and written to `coverage.json` (ignored by git). Every file must stay at
-or above 90% of its lines and 90% of its branches. Code that cannot be reached
-is marked `# pragma: no cover  # <reason>` rather than lowering that bar.
+`--mcp-config` explicitly selects policy from that file instead of process env; an invalid selected file never falls back to another source. `--server-name` defaults to `secure-git`. Missing/malformed policy prevents startup. An explicit `{"deny":[]}` allows ordinary paths, while metadata/path-safety restrictions remain enforced. Policy is loaded once per server startup.
 
-### Trying changes in a client
+## Regex policy
 
-There are two ways to try your changes in a client:
+`SECURE_GIT_POLICY` is a JSON object with exactly one key, `deny`, containing regex strings. Within `.mcp.json` this JSON object is encoded as an environment-variable string.
 
-1. Run the MCP inspector to test your changes. See [Debugging](#debugging) for run instructions.
+| Regex | Meaning |
+| --- | --- |
+| `^private(/|$)` | Deny the root `private` directory and descendants |
+| `^modules/(payments|billing)(/|$)` | Deny two modules by their directory paths |
+| `(^|/)secrets(/|$)` | Deny any directory named `secrets` |
+| `\\.pem$` in JSON source | Deny filenames ending in `.pem` (regex `\.pem$`) |
 
-2. Test using the Claude desktop app. Add the following to your `claude_desktop_config.json`:
+Matching uses case-sensitive regex **search**, applied to each normalized POSIX repository-relative path and all its ancestor directories. Thus `^private$` also denies `private/a/b.txt`; `private` without anchors may also match `notprivate`. Modules are paths, not language-aware import dependencies. Use `/` on every platform. Invalid regexes, unknown policy keys, traversal, absolute paths, NULs, and `.git` components fail closed. Git pathspec magic is never accepted as pattern syntax for `git_add`: filenames are literal.
 
-### Docker
+Keep policy and launcher configuration under operator control, outside the agent's writable scope. Configure any other shell, filesystem, or MCP tools separately: this server cannot restrict those tools or stop them modifying a policy file and restarting a process.
 
-```json
-{
-  "mcpServers": {
-    "git": {
-      "command": "docker",
-      "args": [
-        "run",
-        "--rm",
-        "-i",
-        "--mount", "type=bind,src=/Users/username/Desktop,dst=/projects/Desktop",
-        "--mount", "type=bind,src=/path/to/other/allowed/dir,dst=/projects/other/allowed/dir,ro",
-        "--mount", "type=bind,src=/path/to/file.txt,dst=/projects/path/to/file.txt",
-        "mcp/git"
-      ]
-    }
-  }
-}
+## Tool behavior
+
+| Tool | Enforcement |
+| --- | --- |
+| `git_status` | Structured per-file records; omit protected paths and either side of protected renames. No raw branch/upstream summaries. |
+| `git_diff_unstaged`, `git_diff_staged`, `git_diff` | Check old and new paths, then render complete permitted file changes. External diff, textconv, and submodule expansion are disabled. |
+| `git_show` | Accept commits and `commit:path`. Filter commit patches and directory listings. Deny protected paths, raw blob/tree IDs, index-stage expressions, and symlink/gitlink content. |
+| `git_log` | Omit hidden-only commits; withhold messages/authors for mixed commits. Permitted commit metadata remains visible. |
+| `git_branch` | List local/remote/all branch names, with optional commit filters. Names are not secret-scanned. |
+| `git_add` | Expand literal files/directories or `.`; refuse the whole selection if any affected path or resolved symlink target is restricted. |
+| `git_commit` | Refuse a staged set containing any restricted path, symlink, gitlink, or conflict. Initial commits are supported. |
+| `git_reset` | Refuse when restricted entries are staged. Otherwise unstage everything, preserving working files. |
+| `git_create_branch` | Validate branch/base and create the ref without changing files. |
+| `git_checkout` | Refuse changes involving restricted tree paths, symlinks, gitlinks, or restricted staged changes. No forced checkout, hooks, or recursive submodule updates. |
+
+Write operations refuse in-progress merge, rebase, cherry-pick, revert, autostash, or sequencer state. All calls are serialized within the process; this cannot lock out external Git processes. Hooks are disabled for server-initiated commands. Git command failures and argument-validation failures return safe generic errors rather than stderr or echoed argument values.
+
+Partial results include **“Some content is unavailable according to project policy.”** Denied calls return `isError: true` with **“Access denied according to project policy.”** A generic error may also mean invalid arguments, an unavailable revision, a Git failure, or another blocked operation; raw Git diagnostics are deliberately withheld.
+
+Path policy does not classify arbitrary copied text. Copies of protected content in permitted files, author names/messages on entirely permitted commits, and branch names are not automatically redacted. Similarity-based rename detection checks both paths; a copy or heavily rewritten file at an allowed path is governed by that allowed path. Do not treat directory rules as automatic secret detection or an OS sandbox. Use a trusted repository/Git configuration and exclusive access for writes. Git attribute filters and signing/credential helpers must be controlled by the operator; runtime networking is disabled in the Docker example.
+
+## Extending output filtering
+
+Path policy operates on structured Git data first. Trusted server integrators can then compose output filters, including future token/key redactors:
+
+```python
+from pathlib import Path
+from mcp_server_git.filters import FilterContext
+from mcp_server_git.policy import PathPolicy
+from mcp_server_git.secure_server import create_server
+
+class Redactor:
+    def filter(self, text: str, context: FilterContext) -> str:
+        return text.replace("EXAMPLE_TOKEN", "[REDACTED]")
+
+server = create_server(
+    Path("/repo"),
+    PathPolicy.from_json('{"deny":["^private$"]}'),
+    filters=[Redactor()],
+)
+# Run with: await server.run_stdio_async()
 ```
 
-### UVX
-```json
-{
-"mcpServers": {
-  "git": {
-    "command": "uv",
-    "args": [
-      "--directory",
-      "/<path to mcp-servers>/mcp-servers/src/git",
-      "run",
-      "mcp-server-git"
-    ]
-    }
-  }
-}
+See [examples/redactor.py](examples/redactor.py) for a regex example. Filters run in order on successful tool results and anticipated tool errors, with `tool_name` and `is_error` context. If any filter fails or returns a non-string, the entire output is withheld. The default CLI performs path filtering only; it does not automatically load custom code from `.mcp.json`. Automatic token/key detection is a future extension, not a feature claimed by this version.
+
+## Verification
+
+```sh
+uv sync --frozen --dev
+uv run --frozen pytest -q
+uv run --frozen ruff check .
+uv run --frozen ruff format --check .
+uv run --frozen pyright --pythonpath .venv/bin/python
+uv build
+uv run --frozen python scripts/smoke.py
+docker build -t secure-git-mcp:local .
+uv run --frozen python scripts/smoke.py --docker secure-git-mcp:local
 ```
 
-## Build
+The smoke check creates a disposable repository, makes real MCP requests over stdio, verifies permitted/denied reads, stages and commits permitted files, and checks that denied staging leaves the index unchanged. Docker verification uses a non-root UID/GID and `--network=none`. If your Docker daemon can only bind directories under a shared path, use `scripts/smoke.py --docker secure-git-mcp:local --parent /path/shared/with/daemon`.
 
-Docker build:
+If your home is read-only (as in this cloud environment), set writable tool caches first:
 
-```bash
-cd src/git
-docker build -t mcp/git .
+```sh
+export UV_CACHE_DIR=/workspace/.cache/uv
+export UV_PYTHON_INSTALL_DIR=/workspace/.cache/uv-python
+export DOCKER_CONFIG=/workspace/.cache/docker
 ```
 
-## License
+In this cloud, Docker builds also need the proxy hostname mapping and public CA bundle. Use `uv run --frozen python scripts/build_cloud_image.py` to pass them through supported Docker build arguments and a temporary BuildKit CA mount. No proxy credential or cloud CA is baked into the image; TLS and package-signature checks remain enabled. This build helper uses host networking for installation only; runtime smoke checks still disable networking.
 
-This MCP server is licensed under the MIT License. This means you are free to use, modify, and distribute the software, subject to the terms and conditions of the MIT License. For more details, please see the LICENSE file in the project repository.
+Upstream reference helpers remain in `server.py` to preserve backend/protocol regression coverage. The public CLI and `secure_server.py` are the enforced interface; integrators should use `secure_server.create_server`, not instantiate the historical upstream reference server. No image/repository is pushed automatically.
