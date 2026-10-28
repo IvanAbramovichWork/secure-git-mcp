@@ -22,7 +22,7 @@ RUN --mount=type=secret,id=ca_bundle,mode=0444 \
     && apt-get -o Acquire::https::CaInfo="$ca_file" install -y --no-install-recommends git ca-certificates \
     && rm -rf /var/lib/apt/lists/* \
     && groupadd --gid 1000 app && useradd --uid 1000 --gid 1000 --no-create-home app
-WORKDIR /app
+WORKDIR /repo
 COPY --from=build /app/.venv /app/.venv
 ENV PATH="/app/.venv/bin:$PATH" PYTHONDONTWRITEBYTECODE=1
 USER 1000:1000

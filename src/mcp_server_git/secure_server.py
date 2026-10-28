@@ -2,14 +2,16 @@
 
 from collections.abc import Callable
 from functools import wraps
+from inspect import signature
 from pathlib import Path
-from typing import Any, ParamSpec, Sequence
+from typing import Annotated, Any, ParamSpec, Sequence
 
 from mcp.server.context import CallNext, HandlerResult, ServerRequestContext
 from mcp.server.mcpserver import MCPServer
 from mcp.server.mcpserver.exceptions import ToolError
 from mcp.shared.exceptions import MCPError
 from mcp.types import INVALID_PARAMS, CallToolResult, TextContent
+from pydantic import Field
 
 from .filters import FilterContext, FilterFailure, FilterPipeline, OutputFilter
 from .policy import DENIED, PathPolicy, PolicyError
@@ -19,6 +21,12 @@ from .server import READ_ONLY, SERVER_VERSION, writes
 from .write_tools import WriteTools
 
 _P = ParamSpec("_P")
+RepoPath = Annotated[
+    str | None,
+    Field(
+        description="Optional repository root. Omit to use the server's fixed repository. An explicit path must identify that same repository."
+    ),
+]
 
 
 def create_server(
@@ -77,17 +85,21 @@ def create_server(
         version=SERVER_VERSION,
         middleware=[filter_responses],
         subscriptions=False,
-        instructions="All Git tools enforce project path policy. Partial results omit protected content; denied requests must not be bypassed.",
+        instructions=f"Repository: {str(backend.root)!r}. Omit repo_path to use this fixed repository; do not guess a host path. All Git tools enforce project path policy. Partial results omit protected content; denied requests must not be bypassed.",
     )
 
     def guarded(fn: Callable[_P, str]) -> Callable[_P, str]:
+        parameters = signature(fn)
+
         @wraps(fn)
         def wrapped(*args: _P.args, **kwargs: _P.kwargs) -> str:
             with backend.lock:
                 try:
-                    # repo_path is present in every signature and is never an access-policy input.
-                    path = kwargs.get("repo_path", args[0] if args else None)
-                    if not isinstance(path, str):
+                    # Bind by name because operation arguments precede optional repo_path.
+                    path = parameters.bind(*args, **kwargs).arguments.get("repo_path")
+                    if path is None:
+                        path = str(backend.root)
+                    if not isinstance(path, str) or not path:
                         raise PolicyError(DENIED)
                     backend.validate_repo_path(path)
                     return fn(*args, **kwargs)
@@ -100,7 +112,7 @@ def create_server(
 
         return wrapped
 
-    suffix = " Results and operations are restricted according to project policy."
+    suffix = " Omit repo_path to use the configured repository. Results and operations are restricted according to project policy."
 
     @server.tool(
         name="git_status",
@@ -109,7 +121,7 @@ def create_server(
         structured_output=False,
     )
     @guarded
-    def status(repo_path: str) -> str:
+    def status(repo_path: RepoPath = None) -> str:
         return reader.status()
 
     @server.tool(
@@ -119,7 +131,7 @@ def create_server(
         structured_output=False,
     )
     @guarded
-    def diff_unstaged(repo_path: str, context_lines: int = 3) -> str:
+    def diff_unstaged(context_lines: int = 3, repo_path: RepoPath = None) -> str:
         return reader.diff_unstaged(context_lines)
 
     @server.tool(
@@ -129,7 +141,7 @@ def create_server(
         structured_output=False,
     )
     @guarded
-    def diff_staged(repo_path: str, context_lines: int = 3) -> str:
+    def diff_staged(context_lines: int = 3, repo_path: RepoPath = None) -> str:
         return reader.diff_staged(context_lines)
 
     @server.tool(
@@ -140,7 +152,7 @@ def create_server(
         structured_output=False,
     )
     @guarded
-    def diff(repo_path: str, target: str, context_lines: int = 3) -> str:
+    def diff(target: str, context_lines: int = 3, repo_path: RepoPath = None) -> str:
         return reader.diff(target, context_lines)
 
     @server.tool(
@@ -151,7 +163,7 @@ def create_server(
         structured_output=False,
     )
     @guarded
-    def show(repo_path: str, revision: str) -> str:
+    def show(revision: str, repo_path: RepoPath = None) -> str:
         return reader.show(revision)
 
     @server.tool(
@@ -162,10 +174,10 @@ def create_server(
     )
     @guarded
     def log(
-        repo_path: str,
         max_count: int = 10,
         start_timestamp: str | None = None,
         end_timestamp: str | None = None,
+        repo_path: RepoPath = None,
     ) -> str:
         return reader.log(max_count, start_timestamp, end_timestamp)
 
@@ -177,10 +189,10 @@ def create_server(
     )
     @guarded
     def branch(
-        repo_path: str,
         branch_type: str,
         contains: str | None = None,
         not_contains: str | None = None,
+        repo_path: RepoPath = None,
     ) -> str:
         return reader.branch(branch_type, contains, not_contains)
 
@@ -192,7 +204,7 @@ def create_server(
         structured_output=False,
     )
     @guarded
-    def add(repo_path: str, files: list[str]) -> str:
+    def add(files: list[str], repo_path: RepoPath = None) -> str:
         return writer.add(files)
 
     @server.tool(
@@ -202,7 +214,7 @@ def create_server(
         structured_output=False,
     )
     @guarded
-    def commit(repo_path: str, message: str) -> str:
+    def commit(message: str, repo_path: RepoPath = None) -> str:
         return writer.commit(message)
 
     @server.tool(
@@ -212,7 +224,7 @@ def create_server(
         structured_output=False,
     )
     @guarded
-    def reset(repo_path: str) -> str:
+    def reset(repo_path: RepoPath = None) -> str:
         return writer.reset()
 
     @server.tool(
@@ -223,7 +235,7 @@ def create_server(
     )
     @guarded
     def create_branch(
-        repo_path: str, branch_name: str, base_branch: str | None = None
+        branch_name: str, base_branch: str | None = None, repo_path: RepoPath = None
     ) -> str:
         return writer.create_branch(branch_name, base_branch)
 
@@ -235,7 +247,7 @@ def create_server(
         structured_output=False,
     )
     @guarded
-    def checkout(repo_path: str, branch_name: str) -> str:
+    def checkout(branch_name: str, repo_path: RepoPath = None) -> str:
         return writer.checkout(branch_name)
 
     return server

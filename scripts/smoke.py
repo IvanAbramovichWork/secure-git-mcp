@@ -52,25 +52,28 @@ async def smoke(image: str | None, parent: str | None = None) -> None:
                 "--mount",
                 f"type=bind,src={root},dst=/repo",
                 image,
-                "--repository",
-                "/repo",
             ]
             served_path = "/repo"
         else:
             command = sys.executable
-            args = ["-m", "mcp_server_git", "--repository", str(root)]
+            args = ["-m", "mcp_server_git"]
             served_path = str(root)
         parameters = StdioServerParameters(
-            command=command, args=args, env={**os.environ, "SECURE_GIT_POLICY": policy}
+            command=command,
+            args=args,
+            cwd=str(root),
+            env={**os.environ, "SECURE_GIT_POLICY": policy},
         )
         async with stdio_client(parameters) as streams:
             async with ClientSession(*streams) as session:
                 await session.initialize()
+                explicit = await session.call_tool(
+                    "git_status", {"repo_path": served_path}
+                )
+                assert not explicit.is_error
 
                 async def call(name: str, **kwargs):
-                    result = await session.call_tool(
-                        name, {"repo_path": served_path, **kwargs}
-                    )
+                    result = await session.call_tool(name, kwargs)
                     text = "\n".join(c.text for c in result.content if c.type == "text")
                     assert (
                         "HIDDEN_SENTINEL" not in text
