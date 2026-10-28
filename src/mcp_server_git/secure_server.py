@@ -40,6 +40,7 @@ def create_server(
         "git_status",
         "git_ls_files",
         "git_grep",
+        "git_blame",
         "git_diff_unstaged",
         "git_diff_staged",
         "git_diff",
@@ -131,6 +132,24 @@ def create_server(
         return wrapped
 
     suffix = " Omit repo_path to use the configured repository. Results and operations are restricted according to project policy."
+
+    @server.tool(
+        name="git_blame",
+        description="Blame permitted committed lines; protected historical provenance is omitted and mixed metadata withheld."
+        + suffix,
+        annotations=READ_ONLY,
+        structured_output=False,
+    )
+    @guarded
+    def blame(
+        path: str,
+        revision: str = "HEAD",
+        start_line: int = 1,
+        end_line: int | None = None,
+        max_count: int = 500,
+        repo_path: RepoPath = None,
+    ) -> str:
+        return reader.blame(path, revision, start_line, end_line, max_count)
 
     @server.tool(
         name="git_grep",
