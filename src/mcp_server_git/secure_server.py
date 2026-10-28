@@ -13,6 +13,7 @@ from mcp.shared.exceptions import MCPError
 from mcp.types import INVALID_PARAMS, CallToolResult, TextContent
 from pydantic import Field
 
+from .errors import MESSAGES, SafeGitError, response_message
 from .filters import FilterContext, FilterFailure, FilterPipeline, OutputFilter
 from .policy import DENIED, PathPolicy, PolicyError
 from .read_tools import ReadTools
@@ -61,12 +62,22 @@ def create_server(
         result = await call_next(ctx)
         if not isinstance(result, CallToolResult):
             result = CallToolResult.model_validate(result)
-        # SDK validation errors may quote input values; never return those diagnostics.
-        text = (
-            DENIED + " Invalid arguments or Git operation unavailable."
-            if result.is_error
-            else "\n".join(c.text for c in result.content if isinstance(c, TextContent))
+        raw_text = "\n".join(
+            c.text for c in result.content if isinstance(c, TextContent)
         )
+        if result.is_error:
+            # Only an exact, server-owned marker can select a specific message.
+            code = next(
+                (
+                    c
+                    for c in MESSAGES
+                    if raw_text == f"Error executing tool {name}: secure-git/{c}"
+                ),
+                "INVALID_ARGUMENTS",
+            )
+            text = response_message(code)
+        else:
+            text = raw_text
         try:
             text = pipeline.apply(text, FilterContext(str(name), result.is_error))
         except FilterFailure as exc:
@@ -104,11 +115,16 @@ def create_server(
                     backend.validate_repo_path(path)
                     return fn(*args, **kwargs)
                 except PolicyError as exc:
-                    raise ToolError(str(exc)) from None
+                    code = (
+                        exc.code
+                        if isinstance(exc, SafeGitError)
+                        else "POLICY_DENIED"
+                        if str(exc) == DENIED
+                        else "OPERATION_REFUSED"
+                    )
+                    raise ToolError("secure-git/" + code) from None
                 except Exception:
-                    raise ToolError(
-                        "Git operation unavailable according to project policy."
-                    ) from None
+                    raise ToolError("secure-git/INTERNAL_ERROR") from None
 
         return wrapped
 

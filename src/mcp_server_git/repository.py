@@ -7,6 +7,7 @@ from pathlib import Path
 import git
 
 from .policy import DENIED, PathPolicy, PolicyError
+from .errors import SafeGitError
 
 
 class SecureRepository:
@@ -26,16 +27,17 @@ class SecureRepository:
             candidate = Path(path).resolve(strict=True)
             # Only the configured root is a valid tool repository, including real aliases.
             if candidate != self.root:
-                raise PolicyError(DENIED)
+                raise SafeGitError("REPOSITORY_MISMATCH")
             with git.Repo(candidate) as repo:
                 if Path(repo.git_dir).resolve() != Path(self.repo.git_dir).resolve():
-                    raise PolicyError(DENIED)
+                    raise SafeGitError("REPOSITORY_MISMATCH")
         except (git.GitError, OSError, RuntimeError):
-            raise PolicyError(DENIED) from None
+            raise SafeGitError("REPOSITORY_MISMATCH") from None
 
     def run(self, *args: str, literal_paths: bool = True) -> bytes:
         """No shell, literal paths, no hooks/pagers, and no raw stderr in responses."""
         import os
+        import re
         import subprocess
 
         env = os.environ.copy()
@@ -56,6 +58,7 @@ class SecureRepository:
             GIT_OPTIONAL_LOCKS="0",
             GIT_NO_REPLACE_OBJECTS="1",
             GIT_TERMINAL_PROMPT="0",
+            LC_ALL="C",
         )
         cmd = [
             "git",
@@ -73,14 +76,21 @@ class SecureRepository:
         ]
         try:
             result = subprocess.run(cmd, env=env, capture_output=True, timeout=60)
-        except (OSError, subprocess.TimeoutExpired):
-            raise PolicyError(
-                "Git operation failed; details withheld according to project policy."
-            ) from None
+        except subprocess.TimeoutExpired:
+            raise SafeGitError("GIT_TIMEOUT") from None
+        except OSError:
+            raise SafeGitError("GIT_UNAVAILABLE") from None
         if result.returncode:
-            raise PolicyError(
-                "Git operation failed; details withheld according to project policy."
+            code = (
+                "GIT_OWNERSHIP"
+                if result.returncode == 128
+                and re.match(
+                    rb"\Afatal: detected dubious ownership in repository at ['\"]",
+                    result.stderr,
+                )
+                else "GIT_FAILED"
             )
+            raise SafeGitError(code)
         return result.stdout
 
     def commit_ref(self, revision: str) -> str:
