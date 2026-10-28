@@ -87,8 +87,15 @@ class WriteTools:
                 if p
             )
         )
+        modes = self.backend.run("ls-files", "--stage", "-z", "--", *selections)
+        if any(record.startswith(b"160000 ") for record in modes.split(b"\0")):
+            raise PolicyError(DENIED)
         for path in paths:
             self._require_worktree_path(path)
+            # ls-files emits a directory for an untracked embedded repository.
+            # Never stage a gitlink whose descendant policy cannot be evaluated.
+            if (self.backend.root / path).is_dir():
+                raise PolicyError(DENIED)
         if not paths:
             return "No matching files were staged."
         # Stage only the exact validated expansion, including tracked deletions.
@@ -134,7 +141,9 @@ class WriteTools:
             raise PolicyError(DENIED)
         self._require_changes(self.backend.changes(head, sha))
         self._require_changes(self.backend.changes("--cached"))
-        self.backend.run("checkout", "--no-recurse-submodules", branch_name)
+        self.backend.run(
+            "checkout", "--no-recurse-submodules", "--no-overwrite-ignore", branch_name
+        )
         return "Checkout completed successfully"
 
     def _branch_name(self, name: str) -> None:

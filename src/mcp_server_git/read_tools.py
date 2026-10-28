@@ -58,20 +58,25 @@ class ReadTools:
             if not change.allowed(self.policy):
                 hidden = True
                 continue
-            patch = self.backend.run(
-                "diff",
-                "--no-color",
-                "--no-ext-diff",
-                "--no-textconv",
-                "--no-renames",
-                "--ignore-submodules=all",
-                f"--unified={context_lines}",
-                *args,
-                "--",
-                change.old_path,
-                change.new_path,
-            )
-            output.append(patch.decode("utf-8", errors="replace"))
+            # Render each side independently: excluding old_path's descendants
+            # must not exclude an allowed rename destination beneath that path.
+            for path in dict.fromkeys((change.old_path, change.new_path)):
+                patch = self.backend.run(
+                    "diff",
+                    "--no-color",
+                    "--no-ext-diff",
+                    "--no-textconv",
+                    "--no-renames",
+                    "--ignore-submodules=all",
+                    f"--unified={context_lines}",
+                    *args,
+                    "--",
+                    # Literal pathspecs alone still recurse into directories.
+                    f":(top,literal){path}",
+                    f":(top,exclude,literal){path}/",
+                    literal_paths=False,
+                )
+                output.append(patch.decode("utf-8", errors="replace"))
         return with_notice("".join(output), hidden)
 
     def diff_unstaged(self, context_lines: int = 3) -> str:
@@ -79,7 +84,9 @@ class ReadTools:
 
     def diff_staged(self, context_lines: int = 3) -> str:
         return self._patch(
-            self.backend.changes("--cached"), ["--cached"], context_lines
+            self.backend.changes("--cached"),
+            ["--cached", "--ita-visible-in-index"],
+            context_lines,
         )
 
     def diff(self, target: str, context_lines: int = 3) -> str:

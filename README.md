@@ -89,11 +89,11 @@ Keep policy and launcher configuration under operator control, outside the agent
 | `git_show` | Accept commits and `commit:path`. Filter commit patches and directory listings. Deny protected paths, raw blob/tree IDs, index-stage expressions, and symlink/gitlink content. |
 | `git_log` | Omit hidden-only commits; withhold messages/authors for mixed commits. Permitted commit metadata remains visible. |
 | `git_branch` | List local/remote/all branch names, with optional commit filters. Names are not secret-scanned. |
-| `git_add` | Expand literal files/directories or `.`; refuse the whole selection if any affected path or resolved symlink target is restricted. |
+| `git_add` | Expand literal files/directories or `.`; refuse the whole selection if any affected path or resolved symlink target is restricted. Embedded repositories and gitlinks are refused before staging. |
 | `git_commit` | Refuse a staged set containing any restricted path, symlink, gitlink, or conflict. Initial commits are supported. |
-| `git_reset` | Refuse when restricted entries are staged. Otherwise unstage everything, preserving working files. |
+| `git_reset` | Refuse when restricted entries are staged, including intent-to-add entries. Otherwise unstage everything, preserving working files. |
 | `git_create_branch` | Validate branch/base and create the ref without changing files. |
-| `git_checkout` | Refuse changes involving restricted tree paths, symlinks, gitlinks, or restricted staged changes. No forced checkout, hooks, or recursive submodule updates. |
+| `git_checkout` | Refuse changes involving restricted tree paths, symlinks, gitlinks, or restricted staged changes. No forced checkout, overwriting ignored files, hooks, or recursive submodule updates. |
 
 Write operations refuse in-progress merge, rebase, cherry-pick, revert, autostash, or sequencer state. All calls are serialized within the process; this cannot lock out external Git processes. Hooks are disabled for server-initiated commands. Git command failures and argument-validation failures return safe generic errors rather than stderr or echoed argument values.
 
