@@ -43,7 +43,20 @@ async def test_all_twelve_tools_and_filtered_descriptions(repo):
     root = Path(repo.working_dir)
     async with secure_connect(root) as session:
         tools = await session.list_tools()
-        assert len(tools.tools) == 12
+        assert {
+            "git_status",
+            "git_diff_unstaged",
+            "git_diff_staged",
+            "git_diff",
+            "git_show",
+            "git_log",
+            "git_branch",
+            "git_add",
+            "git_commit",
+            "git_reset",
+            "git_create_branch",
+            "git_checkout",
+        }.issubset({t.name for t in tools.tools})
         assert all(
             t.description is not None and "policy" in t.description.lower()
             for t in tools.tools
