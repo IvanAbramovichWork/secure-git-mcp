@@ -1,0 +1,12 @@
+# Only explicitly required build inputs belong in the context.
+*
+!Dockerfile
+!pyproject.toml
+!uv.lock
+!README.md
+!LICENSE
+!UPSTREAM-LICENSE
+!UPSTREAM.md
+!src/
+!src/**
+src/**/__pycache__/

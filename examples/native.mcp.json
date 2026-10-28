@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "secure-git": {
+      "command": "uv",
+      "args": ["--directory", "/absolute/path/to/secure-git-mcp", "run", "--frozen", "secure-git-mcp", "--repository", "/absolute/path/to/project"],
+      "env": {
+        "SECURE_GIT_POLICY": "{\"deny\":[\"^private(/|$)\",\"^modules/payments(/|$)\"]}"
+      }
+    }
+  }
+}
