@@ -92,6 +92,14 @@ async def smoke(image: str | None, parent: str | None = None) -> None:
                     and "VISIBLE_SENTINEL" in text
                     and "Some content is unavailable" in text
                 )
+                result, text = await call("git_ls_files", paths=["public"])
+                assert not result.is_error and "public/readme" in text
+                result, text = await call("git_grep", pattern="VISIBLE_SENTINEL")
+                assert not result.is_error and "VISIBLE_SENTINEL" in text
+                result, text = await call("git_blame", path="public/readme")
+                assert not result.is_error and "VISIBLE_SENTINEL" in text
+                result, text = await call("git_log", paths=["public/readme"])
+                assert not result.is_error and "Commit:" in text
                 (root / "public/readme").write_text("VISIBLE_NEW\n")
                 (root / "private/key").write_text("HIDDEN_NEW\n")
                 index = root / ".git/index"
@@ -104,11 +112,40 @@ async def smoke(image: str | None, parent: str | None = None) -> None:
                     git(root, "diff", "--cached", "--name-only").strip()
                     == "public/readme"
                 )
+                result, text = await call("git_unstage", files=["public/readme"])
+                assert (
+                    not result.is_error
+                    and git(root, "diff", "--cached", "--name-only") == ""
+                )
+                result, text = await call("git_add", files=["public/readme"])
+                assert not result.is_error
                 previous = git(root, "rev-parse", "HEAD")
                 result, text = await call("git_commit", message="permitted change")
                 assert not result.is_error, text
                 assert git(root, "rev-parse", "HEAD") != previous
                 assert (root / "private/key").read_text() == "HIDDEN_NEW\n"
+                result, text = await call(
+                    "git_diff_revisions",
+                    base=previous.strip(),
+                    target="HEAD",
+                    paths=["public/readme"],
+                )
+                assert not result.is_error and "VISIBLE_NEW" in text
+                (root / "public/readme").write_text("TRANSIENT\n")
+                result, text = await call(
+                    "git_restore", files=["public/readme", "private/key"]
+                )
+                assert (
+                    result.is_error
+                    and (root / "public/readme").read_text() == "TRANSIENT\n"
+                )
+                result, text = await call("git_restore", files=["public/readme"])
+                assert (
+                    not result.is_error
+                    and (root / "public/readme").read_text() == "VISIBLE_NEW\n"
+                )
+                assert (root / "private/key").read_text() == "HIDDEN_NEW\n"
+
                 result, text = await call("git_diff_unstaged")
                 assert (
                     not result.is_error

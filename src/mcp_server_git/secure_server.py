@@ -43,6 +43,7 @@ def create_server(
         "git_blame",
         "git_diff_revisions",
         "git_unstage",
+        "git_restore",
         "git_diff_unstaged",
         "git_diff_staged",
         "git_diff",
@@ -307,6 +308,23 @@ def create_server(
     @guarded
     def commit(message: str, repo_path: RepoPath = None) -> str:
         return writer.commit(message)
+
+    @server.tool(
+        name="git_restore",
+        description="Destructively restore explicit permitted regular files; directory selectors and ambiguous transitions are refused."
+        + suffix,
+        annotations=writes(destructive=True, idempotent=True),
+        structured_output=False,
+    )
+    @guarded
+    def restore(
+        files: list[str],
+        source: str | None = None,
+        staged: bool = False,
+        worktree: bool | None = None,
+        repo_path: RepoPath = None,
+    ) -> str:
+        return writer.restore(files, source, staged, worktree)
 
     @server.tool(
         name="git_unstage",
