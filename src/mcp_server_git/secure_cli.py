@@ -17,8 +17,9 @@ from .secure_server import serve
     "--repository",
     "-r",
     type=click.Path(path_type=Path),
-    required=True,
-    help="Git working tree to serve exclusively.",
+    default=".",
+    show_default=True,
+    help="Git working tree to serve exclusively; defaults to the current directory.",
 )
 @click.option(
     "--mcp-config",

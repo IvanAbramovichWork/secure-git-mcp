@@ -24,7 +24,7 @@ Copy [examples/docker.mcp.json](examples/docker.mcp.json) to your MCP client's `
         "--user", "1000:1000",
         "--env", "SECURE_GIT_POLICY",
         "--mount", "type=bind,src=/absolute/path/to/project,dst=/repo",
-        "secure-git-mcp:local", "--repository", "/repo"
+        "secure-git-mcp:local"
       ],
       "env": {
         "SECURE_GIT_POLICY": "{\"deny\":[\"^private(/|$)\",\"^modules/payments(/|$)\"]}"
@@ -34,7 +34,7 @@ Copy [examples/docker.mcp.json](examples/docker.mcp.json) to your MCP client's `
 }
 ```
 
-The client's `env` entry sets the Docker process environment; `--env SECURE_GIT_POLICY` forwards it into the container. The server's tool calls use `repo_path: "/repo"`, not the host path. Use `-i` without `-t`: MCP runs over stdio, not an HTTP port. Runtime networking is disabled; local Git operations do not need it. Network access is needed while building dependencies.
+The client's `env` entry sets the Docker process environment; `--env SECURE_GIT_POLICY` forwards it into the container. The image starts in `/repo` and discovers the mounted repository automatically; no `--repository` argument is needed. Docker still requires `dst=/repo`, but only `src` needs customizing. Tool calls can omit `repo_path` entirely; `git_status({})` uses the pinned repository. Use `-i` without `-t`: MCP runs over stdio, not an HTTP port. Runtime networking is disabled; local Git operations do not need it. Network access is needed while building dependencies.
 
 The image defaults to UID:GID `1000:1000`. Set `--user` to the repository owner's output from `id -u` and `id -g` on Linux, and ensure the working tree and Git directory are readable/writable by that identity. Git commits require a locally configured author name and email. Do not bypass Git ownership checks with `safe.directory=*`; fix ownership or explicitly trust the one intended repository in operator-controlled Git configuration. Linked worktrees also need their external Git metadata mounted at the correct location; a normal standalone clone is easiest to deploy. A read-only bind mount permits reads but cannot support write tools.
 
@@ -52,7 +52,9 @@ SECURE_GIT_POLICY='{"deny":["^private(/|$)","^modules/payments(/|$)"]}' \
 
 For an MCP client, use [examples/native.mcp.json](examples/native.mcp.json). It runs this checkout with `uv --directory /absolute/path/to/secure-git-mcp run --frozen secure-git-mcp ...`. Installing the upstream package from PyPI is not an installation of this derivative: use this checkout or its built wheel.
 
-The compatibility command `mcp-server-git` and `python -m mcp_server_git` both invoke the same secured CLI. `--repository` is mandatory and pins one repository; a tool cannot open a different or nested repository. When the startup path points inside a repository, it resolves to its working-tree root. Tool `repo_path` must identify that root (a real filesystem alias is accepted).
+The compatibility command `mcp-server-git` and `python -m mcp_server_git` both invoke the same secured CLI. `--repository` is optional and defaults to the startup working directory; an explicit value overrides it. The image working directory defaults to `/repo`. When the startup path points inside a repository, it resolves to its working-tree root and pins that repository. If the default directory is not in a Git working tree, startup fails rather than searching other mounts. Every tool accepts omitted or null `repo_path` to use that fixed root; explicit nonempty paths must identify the same root (a real filesystem alias is accepted). Other and nested repositories remain inaccessible. Existing clients sending the correct explicit path continue to work.
+
+The native `uv --directory` option changes the working directory: keep an explicit `--repository` when launching from the server checkout to serve a different project. To run directly from the target repository using an installed executable, use `SECURE_GIT_POLICY='{"deny":[]}' secure-git-mcp`.
 
 Optional arguments:
 
@@ -159,7 +161,7 @@ docker build -t secure-git-mcp:local .
 uv run --frozen python scripts/smoke.py --docker secure-git-mcp:local
 ```
 
-The smoke check creates a disposable repository, makes real MCP requests over stdio, verifies permitted/denied reads, stages and commits permitted files, and checks that denied staging leaves the index unchanged. Docker verification uses a non-root UID/GID and `--network=none`. If your Docker daemon can only bind directories under a shared path, use `scripts/smoke.py --docker secure-git-mcp:local --parent /path/shared/with/daemon`.
+The smoke check creates a disposable repository, starts without `--repository`, makes real MCP requests over stdio with omitted `repo_path` (and checks explicit-path compatibility), verifies permitted/denied reads, stages and commits permitted files, and checks that denied staging leaves the index unchanged. Docker verification uses a non-root UID/GID and `--network=none`. If your Docker daemon can only bind directories under a shared path, use `scripts/smoke.py --docker secure-git-mcp:local --parent /path/shared/with/daemon`.
 
 If your home is read-only (as in this cloud environment), set writable tool caches first:
 

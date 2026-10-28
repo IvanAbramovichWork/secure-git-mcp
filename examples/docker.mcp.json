@@ -2,7 +2,7 @@
   "mcpServers": {
     "secure-git": {
       "command": "docker",
-      "args": ["run", "--rm", "-i", "--network=none", "--user", "1000:1000", "--env", "SECURE_GIT_POLICY", "--mount", "type=bind,src=/absolute/path/to/project,dst=/repo", "secure-git-mcp:local", "--repository", "/repo"],
+      "args": ["run", "--rm", "-i", "--network=none", "--user", "1000:1000", "--env", "SECURE_GIT_POLICY", "--mount", "type=bind,src=/absolute/path/to/project,dst=/repo", "secure-git-mcp:local"],
       "env": {
         "SECURE_GIT_POLICY": "{\"deny\":[\"^private(/|$)\",\"^modules/payments(/|$)\"]}"
       }

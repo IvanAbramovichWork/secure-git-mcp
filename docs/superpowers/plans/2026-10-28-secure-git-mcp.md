@@ -105,3 +105,14 @@
 - [x] Implement deny-list loading and logical glob matching, reject invalid/unsupported patterns without echoing values, and bind all CLI/Python paths once to the canonical repository root. Keep explicit MCP configuration mandatory and preserve existing validation.
 - [x] Exercise reads/writes and history with a Claude-only denied directory plus an MCP-only denied directory, including startup from a subdirectory. Update smoke validation for native and Docker, documenting absent-file fallback and mounted relative settings.
 - [x] Run complete pytest, Ruff, Pyright, build, native smoke, and Docker build/smoke as capabilities permit; get an independent review of the delta, fix relevant findings with reproducing tests, and commit the completed change. Record any genuine environment blocker separately from application checks.
+
+### Task 7: Optional repository arguments with direct Docker defaults
+
+**User choice:** Keep `command: docker`, fixed `dst=/repo`, and make only source path customizable; startup `--repository` and tool `repo_path` become optional.
+
+**Files:** `secure_cli.py`, `secure_server.py`, Dockerfile, Docker example, README, smoke script, and `tests/test_default_repository.py`.
+
+- [x] Add failing CLI tests for cwd defaults, nested cwd root resolution and invalid cwd; MCP tests for all 12 tools without repo_path, null default, optional schemas with required operation inputs preserved, and rejection of explicit wrong paths without mutation.
+- [x] Default CLI repository to `.`, set image WORKDIR `/repo`, default omitted/null tool repo_path to the pinned root using signature binding, and retain validation for explicit paths. Advertise defaults; preserve existing argument names.
+- [x] Exercise native and Docker stdio startup without --repository or tool repo_path; retain explicit override tests. Update example/docs to keep dst=/repo fixed and omit --repository.
+- [x] Run full tests, lint/format, type checks, package build, and Docker build/smoke. Review the security boundary independently, fix relevant findings, commit, and save updated startup instructions.
