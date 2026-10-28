@@ -129,6 +129,8 @@ Path policy does not classify arbitrary copied text. Copies of protected content
 
 `git_grep(pattern, paths=None, revision=None, regex=False, max_count=1000)` searches permitted tracked working files or a commit. Patterns are literal by default; `regex=true` selects extended POSIX regex. Results include JSON-escaped filename, line number and match text. No matches is successful; binaries, symlinks, submodules, ignored/untracked files and external transforms are excluded. Results are bounded and truncation is marked.
 
+`git_blame(path, revision="HEAD", start_line=1, end_line=None, max_count=500)` returns JSON line records with commit, line number and source text. Protected historical filenames (including rename origins) suppress the affected lines. Author/summary fields are withheld for originating commits that touch denied paths. Raw blobs, symlinks, submodules, and cross-file copy/move detection are not supported. A policy/truncation notice may follow the JSON records.
+
 ## Extending output filtering
 
 Path policy operates on structured Git data first. Trusted server integrators can then compose output filters, including future token/key redactors:

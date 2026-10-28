@@ -23,6 +23,18 @@ class ReadTools:
         self.backend = repository
         self.policy = repository.policy
 
+    def blame(
+        self,
+        path: str,
+        revision: str = "HEAD",
+        start_line: int = 1,
+        end_line: int | None = None,
+        max_count: int = 500,
+    ) -> str:
+        from .blame import blame
+
+        return blame(self.backend, path, revision, start_line, end_line, max_count)
+
     def grep(
         self,
         pattern: str,
