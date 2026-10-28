@@ -39,6 +39,7 @@ def create_server(
     names = {
         "git_status",
         "git_ls_files",
+        "git_grep",
         "git_diff_unstaged",
         "git_diff_staged",
         "git_diff",
@@ -130,6 +131,24 @@ def create_server(
         return wrapped
 
     suffix = " Omit repo_path to use the configured repository. Results and operations are restricted according to project policy."
+
+    @server.tool(
+        name="git_grep",
+        description="Search permitted tracked working files or a commit; literal patterns by default."
+        + suffix,
+        annotations=READ_ONLY,
+        structured_output=False,
+    )
+    @guarded
+    def grep(
+        pattern: str,
+        paths: list[str] | None = None,
+        revision: str | None = None,
+        regex: bool = False,
+        max_count: int = 1000,
+        repo_path: RepoPath = None,
+    ) -> str:
+        return reader.grep(pattern, paths, revision, regex, max_count)
 
     @server.tool(
         name="git_ls_files",
