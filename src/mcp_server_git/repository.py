@@ -33,7 +33,7 @@ class SecureRepository:
         except (git.GitError, OSError, RuntimeError):
             raise PolicyError(DENIED) from None
 
-    def run(self, *args: str) -> bytes:
+    def run(self, *args: str, literal_paths: bool = True) -> bytes:
         """No shell, literal paths, no hooks/pagers, and no raw stderr in responses."""
         import os
         import subprocess
@@ -46,10 +46,13 @@ class SecureRepository:
             "GIT_OBJECT_DIRECTORY",
             "GIT_ALTERNATE_OBJECT_DIRECTORIES",
             "GIT_COMMON_DIR",
+            "GIT_GLOB_PATHSPECS",
+            "GIT_NOGLOB_PATHSPECS",
+            "GIT_ICASE_PATHSPECS",
         ):
             env.pop(name, None)
         env.update(
-            GIT_LITERAL_PATHSPECS="1",
+            GIT_LITERAL_PATHSPECS="1" if literal_paths else "0",
             GIT_OPTIONAL_LOCKS="0",
             GIT_NO_REPLACE_OBJECTS="1",
             GIT_TERMINAL_PROMPT="0",
@@ -120,6 +123,7 @@ class SecureRepository:
         raw = self.run(
             "diff",
             "--raw",
+            "--ita-visible-in-index",
             "-z",
             "--no-abbrev",
             "--no-ext-diff",
