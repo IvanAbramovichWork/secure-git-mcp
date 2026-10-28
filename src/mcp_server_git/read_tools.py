@@ -23,6 +23,18 @@ class ReadTools:
         self.backend = repository
         self.policy = repository.policy
 
+    def grep(
+        self,
+        pattern: str,
+        paths: list[str] | None = None,
+        revision: str | None = None,
+        regex: bool = False,
+        max_count: int = 1000,
+    ) -> str:
+        from .search import grep
+
+        return grep(self.backend, pattern, paths, revision, regex, max_count)
+
     def ls_files(
         self,
         paths: list[str] | None = None,

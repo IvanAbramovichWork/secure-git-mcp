@@ -96,3 +96,33 @@ def selected_files(
         else:
             hidden = True
     return visible, hidden
+
+
+def require_working_file(
+    backend: SecureRepository, path: str, missing_ok: bool = False
+) -> None:
+    """Never read or update a working file through a symlink ancestor."""
+    from pathlib import Path
+
+    backend.policy.require(path)
+    candidate = backend.root
+    try:
+        for component in Path(path).parts:
+            candidate = candidate / component
+            if candidate.is_symlink():
+                raise PolicyError("Access denied according to project policy.")
+        backend.policy.require(candidate.resolve().relative_to(backend.root).as_posix())
+        if candidate.exists() and not candidate.is_file():
+            raise PolicyError("Access denied according to project policy.")
+        if not missing_ok and not candidate.is_file():
+            raise PolicyError("Working file unavailable.")
+    except (ValueError, OSError, RuntimeError):
+        raise PolicyError("Access denied according to project policy.") from None
+
+
+def exact_pathspecs(paths: list[str]) -> list[str]:
+    return [
+        spec
+        for path in dict.fromkeys(paths)
+        for spec in (f":(top,literal){path}", f":(top,exclude,literal){path}/")
+    ]

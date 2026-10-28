@@ -34,7 +34,9 @@ class SecureRepository:
         except (git.GitError, OSError, RuntimeError):
             raise SafeGitError("REPOSITORY_MISMATCH") from None
 
-    def run(self, *args: str, literal_paths: bool = True) -> bytes:
+    def run(
+        self, *args: str, literal_paths: bool = True, ok_codes: tuple[int, ...] = (0,)
+    ) -> bytes:
         """No shell, literal paths, no hooks/pagers, and no raw stderr in responses."""
         import os
         import re
@@ -80,7 +82,7 @@ class SecureRepository:
             raise SafeGitError("GIT_TIMEOUT") from None
         except OSError:
             raise SafeGitError("GIT_UNAVAILABLE") from None
-        if result.returncode:
+        if result.returncode not in ok_codes:
             code = (
                 "GIT_OWNERSHIP"
                 if result.returncode == 128

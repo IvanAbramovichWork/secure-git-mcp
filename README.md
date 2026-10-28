@@ -127,6 +127,8 @@ Path policy does not classify arbitrary copied text. Copies of protected content
 
 `git_ls_files(paths=None, revision=None, include_untracked=False)` lists permitted regular files, using the index by default. A commit revision selects historical files; optional untracked files exclude ignored entries and cannot be combined with a revision. Selectors are literal file/directory paths (`.` selects the root), not globs. Names are JSON-escaped, and protected/symlink/submodule entries are omitted with a policy notice.
 
+`git_grep(pattern, paths=None, revision=None, regex=False, max_count=1000)` searches permitted tracked working files or a commit. Patterns are literal by default; `regex=true` selects extended POSIX regex. Results include JSON-escaped filename, line number and match text. No matches is successful; binaries, symlinks, submodules, ignored/untracked files and external transforms are excluded. Results are bounded and truncation is marked.
+
 ## Extending output filtering
 
 Path policy operates on structured Git data first. Trusted server integrators can then compose output filters, including future token/key redactors:
