@@ -1,5 +1,5 @@
-# __main__.py
+"""Both module and console invocation use the secured policy entry point."""
 
-from mcp_server_git import main
+from . import main
 
 main()

@@ -17,7 +17,7 @@ import pytest
 from click.testing import CliRunner
 
 import mcp_server_git
-from mcp_server_git import main
+from upstream_cli import main
 from mcp_server_git.server import serve
 
 from conftest import connect
@@ -127,7 +127,7 @@ def test_main_sets_log_level_and_serves_repository(
         served.append(repository)
 
     with (
-        mock.patch("mcp_server_git.serve", fake_serve),
+        mock.patch("upstream_cli.serve", fake_serve),
         mock.patch("logging.basicConfig") as basic_config,
     ):
         result = CliRunner().invoke(main, [*flags, "--repository", str(tmp_path)])
@@ -144,7 +144,7 @@ def test_main_short_repository_flag(tmp_path: Path):
         served.append(repository)
 
     with (
-        mock.patch("mcp_server_git.serve", fake_serve),
+        mock.patch("upstream_cli.serve", fake_serve),
         mock.patch("logging.basicConfig"),
     ):
         result = CliRunner().invoke(main, ["-r", str(tmp_path)])
@@ -159,7 +159,7 @@ def test_main_without_repository_serves_none():
         served.append(repository)
 
     with (
-        mock.patch("mcp_server_git.serve", fake_serve),
+        mock.patch("upstream_cli.serve", fake_serve),
         mock.patch("logging.basicConfig"),
     ):
         result = CliRunner().invoke(main, [])
@@ -188,7 +188,9 @@ def test_python_dash_m_calls_main():
 
 def test_console_script_nonexistent_repository_exits_with_one_line_error(
     tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
 ):
+    monkeypatch.setenv("SECURE_GIT_POLICY", '{"deny":[]}')
     # The one subprocess test: the installed entry point, end to end. A
     # nonexistent --repository exits non-zero with a one-line logged error
     # naming the path, not a Python traceback (#4993).
@@ -204,6 +206,4 @@ def test_console_script_nonexistent_repository_exits_with_one_line_error(
     )
     assert proc.returncode == 1
     assert "Traceback" not in proc.stderr
-    assert proc.stderr.splitlines() == [
-        f"ERROR:mcp_server_git.server:{missing} does not exist"
-    ]
+    assert proc.stderr.splitlines() == ["Error: Invalid configured repository."]

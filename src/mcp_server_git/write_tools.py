@@ -1,4 +1,5 @@
 """Guard complete write effects before executing any mutation, under the repository lock."""
+
 from functools import wraps
 from pathlib import Path
 from typing import Callable, ParamSpec, TypeVar
@@ -6,8 +7,8 @@ from typing import Callable, ParamSpec, TypeVar
 from .policy import DENIED, PolicyError, normalize_path
 from .repository import Change, SecureRepository
 
-_P = ParamSpec('_P')
-_R = TypeVar('_R')
+_P = ParamSpec("_P")
+_R = TypeVar("_R")
 
 
 def locked(fn: Callable[_P, _R]) -> Callable[_P, _R]:
@@ -16,6 +17,7 @@ def locked(fn: Callable[_P, _R]) -> Callable[_P, _R]:
         instance = args[0]
         with instance.backend.lock:  # type: ignore[attr-defined]
             return fn(*args, **kwargs)
+
     return wrapper
 
 
@@ -24,11 +26,23 @@ class WriteTools:
         self.backend = repository
 
     def _clean_operation_state(self) -> None:
-        for name in ('MERGE_HEAD', 'MERGE_AUTOSTASH', 'CHERRY_PICK_HEAD', 'REVERT_HEAD', 'rebase-merge', 'rebase-apply', 'sequencer'):
+        for name in (
+            "MERGE_HEAD",
+            "MERGE_AUTOSTASH",
+            "CHERRY_PICK_HEAD",
+            "REVERT_HEAD",
+            "rebase-merge",
+            "rebase-apply",
+            "sequencer",
+        ):
             if Path(self.backend.repo.git_dir, name).exists():
-                raise PolicyError('In-progress Git operation is unavailable according to project policy.')
-        if self.backend.run('ls-files', '--unmerged', '-z'):
-            raise PolicyError('Unmerged index is unavailable according to project policy.')
+                raise PolicyError(
+                    "In-progress Git operation is unavailable according to project policy."
+                )
+        if self.backend.run("ls-files", "--unmerged", "-z"):
+            raise PolicyError(
+                "Unmerged index is unavailable according to project policy."
+            )
 
     def _require_changes(self, changes: list[Change]) -> None:
         if any(not c.allowed(self.backend.policy) for c in changes):
@@ -47,53 +61,69 @@ class WriteTools:
     def add(self, files: list[str]) -> str:
         self._clean_operation_state()
         if not files:
-            raise PolicyError('No files supplied.')
+            raise PolicyError("No files supplied.")
         selections = []
         for name in files:
-            if name == '.':
-                selections.append('.')
+            if name == ".":
+                selections.append(".")
             else:
                 name = normalize_path(name)
                 self._require_worktree_path(name)
                 selections.append(name)
         # ls-files also returns tracked deletions; -z and literal pathspecs preserve filenames.
-        raw = self.backend.run('ls-files', '-z', '--cached', '--others', '--exclude-standard', '--', *selections)
-        paths = list(dict.fromkeys(p.decode('utf-8', errors='surrogateescape') for p in raw.split(b'\0') if p))
+        raw = self.backend.run(
+            "ls-files",
+            "-z",
+            "--cached",
+            "--others",
+            "--exclude-standard",
+            "--",
+            *selections,
+        )
+        paths = list(
+            dict.fromkeys(
+                p.decode("utf-8", errors="surrogateescape")
+                for p in raw.split(b"\0")
+                if p
+            )
+        )
         for path in paths:
             self._require_worktree_path(path)
         if not paths:
-            return 'No matching files were staged.'
+            return "No matching files were staged."
         # Stage only the exact validated expansion, including tracked deletions.
-        self.backend.run('add', '--all', '--', *paths)
-        return 'Files staged successfully'
+        self.backend.run("add", "--all", "--", *paths)
+        return "Files staged successfully"
 
     @locked
     def commit(self, message: str) -> str:
         self._clean_operation_state()
-        changes = self.backend.changes('--cached')
+        changes = self.backend.changes("--cached")
         self._require_changes(changes)
         if not changes:
-            raise PolicyError('No changes staged for commit.')
-        self.backend.run('-c', 'commit.gpgSign=false', 'commit', '--no-verify', '-m', message)
-        return 'Changes committed successfully with hash ' + str(self.backend.head())
+            raise PolicyError("No changes staged for commit.")
+        self.backend.run(
+            "-c", "commit.gpgSign=false", "commit", "--no-verify", "-m", message
+        )
+        return "Changes committed successfully with hash " + str(self.backend.head())
 
     @locked
     def reset(self) -> str:
         self._clean_operation_state()
-        self._require_changes(self.backend.changes('--cached'))
+        self._require_changes(self.backend.changes("--cached"))
         if self.backend.head() is None:
-            self.backend.run('read-tree', '--empty')
+            self.backend.run("read-tree", "--empty")
         else:
-            self.backend.run('reset', '--mixed', 'HEAD', '--')
-        return 'All staged changes reset'
+            self.backend.run("reset", "--mixed", "HEAD", "--")
+        return "All staged changes reset"
 
     @locked
     def create_branch(self, branch_name: str, base_branch: str | None = None) -> str:
         self._clean_operation_state()
         self._branch_name(branch_name)
-        sha = self.backend.commit_ref(base_branch or 'HEAD')
-        self.backend.run('branch', '--', branch_name, sha)
-        return 'Branch created successfully'
+        sha = self.backend.commit_ref(base_branch or "HEAD")
+        self.backend.run("branch", "--", branch_name, sha)
+        return "Branch created successfully"
 
     @locked
     def checkout(self, branch_name: str) -> str:
@@ -103,11 +133,11 @@ class WriteTools:
         if head is None:
             raise PolicyError(DENIED)
         self._require_changes(self.backend.changes(head, sha))
-        self._require_changes(self.backend.changes('--cached'))
-        self.backend.run('checkout', '--no-recurse-submodules', branch_name)
-        return 'Checkout completed successfully'
+        self._require_changes(self.backend.changes("--cached"))
+        self.backend.run("checkout", "--no-recurse-submodules", branch_name)
+        return "Checkout completed successfully"
 
     def _branch_name(self, name: str) -> None:
-        if not name or name.startswith('-') or '\x00' in name:
+        if not name or name.startswith("-") or "\x00" in name:
             raise PolicyError(DENIED)
-        self.backend.run('check-ref-format', '--branch', name)
+        self.backend.run("check-ref-format", "--branch", name)
