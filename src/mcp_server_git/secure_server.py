@@ -248,9 +248,10 @@ def create_server(
         max_count: int = 10,
         start_timestamp: str | None = None,
         end_timestamp: str | None = None,
+        paths: list[str] | None = None,
         repo_path: RepoPath = None,
     ) -> str:
-        return reader.log(max_count, start_timestamp, end_timestamp)
+        return reader.log(max_count, start_timestamp, end_timestamp, paths)
 
     @server.tool(
         name="git_branch",
