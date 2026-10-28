@@ -6,6 +6,7 @@ from typing import Callable, ParamSpec, TypeVar
 
 from .policy import DENIED, PolicyError, normalize_path
 from .repository import Change, SecureRepository
+from .paths import PathSelection, REGULAR_MODES, entries
 
 _P = ParamSpec("_P")
 _R = TypeVar("_R")
@@ -113,6 +114,47 @@ class WriteTools:
             "-c", "commit.gpgSign=false", "commit", "--no-verify", "-m", message
         )
         return "Changes committed successfully with hash " + str(self.backend.head())
+
+    @locked
+    def unstage(self, files: list[str]) -> str:
+        self._clean_operation_state()
+        if not files:
+            raise PolicyError("Empty path selection.")
+        selection = PathSelection(files, self.backend.policy)
+        head = self.backend.head()
+        index_entries = entries(self.backend)
+        candidates = list(index_entries)
+        if head is not None:
+            candidates += entries(self.backend, head)
+        selected = [e for e in candidates if selection.matches(e.path)]
+        index_paths = {e.path for e in index_entries}
+        for entry in selected:
+            parts = entry.path.split("/")
+            for n in range(1, len(parts)):
+                ancestor = "/".join(parts[:n])
+                if ancestor in index_paths and not selection.matches(ancestor):
+                    raise PolicyError("Ambiguous file/directory transition.")
+            self.backend.policy.require(entry.path)
+            if entry.mode not in REGULAR_MODES:
+                raise PolicyError(DENIED)
+        if not selected:
+            raise PolicyError("No matching tracked files.")
+        if head is None:
+            self.backend.run(
+                "update-index",
+                "--force-remove",
+                "--",
+                *dict.fromkeys(e.path for e in selected),
+            )
+        else:
+            self.backend.run(
+                "reset",
+                "--no-refresh",
+                head,
+                "--",
+                *(p or "." for p in selection.paths),
+            )
+        return "Selected files unstaged; working files preserved."
 
     @locked
     def reset(self) -> str:
