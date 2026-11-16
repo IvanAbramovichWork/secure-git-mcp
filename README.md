@@ -190,3 +190,5 @@ export DOCKER_CONFIG=/workspace/.cache/docker
 In this cloud, Docker builds also need the proxy hostname mapping and public CA bundle. Use `uv run --frozen python scripts/build_cloud_image.py` to pass them through supported Docker build arguments and a temporary BuildKit CA mount. No proxy credential or cloud CA is baked into the image; TLS and package-signature checks remain enabled. This build helper uses host networking for installation only; runtime smoke checks still disable networking.
 
 Upstream reference helpers remain in `server.py` to preserve backend/protocol regression coverage. The public CLI and `secure_server.py` are the enforced interface; integrators should use `secure_server.create_server`, not instantiate the historical upstream reference server. No image/repository is pushed automatically.
+
+[![M8ven Score](https://m8ven.ai/badge/mcp/ivanabramovichwork-secure-mcp-server-git-16bzc2?v=08ad5950e8c2359e0cf0de7b254d6b1a)](https://m8ven.ai/mcp/ivanabramovichwork-secure-mcp-server-git-16bzc2?s=readme)
