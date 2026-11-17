@@ -29,7 +29,11 @@ Use pytest and pytest-asyncio; async tests run in automatic mode. Name files `te
 
 ## Commit & Pull Request Guidelines
 
-Recent feature commits use `feat: <imperative description>`; follow that pattern for features and keep other subjects concise. Pull requests should describe behavior changes, link relevant issues, report validation commands/results, and explain security implications. Update documentation and regression tests when behavior changes.
+Implement every feature in a separate branch. Use `refs_<task_number>` when a Redmine task number is available (for example, `refs_450123`); otherwise, use `refs_<feature_name>` (for example, `refs_new_feature`).
+
+For both GitHub and GitLab origins, write all commit messages in English. Every commit title must start with `refs #<task_number>` followed by an English description (for example, `refs #450123 Add policy validation`). If no task number is available, ask for it before creating a commit; do not invent a number or use an alternative prefix.
+
+Pull requests should describe behavior changes, link relevant issues, report validation commands/results, and explain security implications. Update documentation and regression tests when behavior changes.
 
 ## Security & Configuration Tips
 
